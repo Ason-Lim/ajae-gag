@@ -6,10 +6,17 @@ from models import db, User, Pledge, Attempt, MEMBERS
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'ajae_gag_survival_secret_key_2026')
 
-# Render PostgreSQL 호환 DATABASE_URL 설정 (sqlite fallback 포함)
+# Render PostgreSQL 호환 DATABASE_URL 설정 (psycopg2 및 pg8000 fallback 포함)
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///ajae_gag.db')
 if db_url.startswith('postgres://'):
     db_url = db_url.replace('postgres://', 'postgresql://', 1)
+
+if db_url.startswith('postgresql://') and not db_url.startswith('postgresql+'):
+    try:
+        import psycopg2
+    except Exception:
+        # C 확장 모듈 문제 발생 시 순수 파이썬 pg8000 드라이버 자동 전환
+        db_url = db_url.replace('postgresql://', 'postgresql+pg8000://', 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -301,7 +308,6 @@ def dashboard_summary():
 def seed_demo_data():
     """시연용 샘플 데이터 생성 API"""
     with app.app_context():
-        # 기존 시도/서약은 유지하거나 샘플 데이터 추가
         users = {u.name: u for u in User.query.all()}
         
         sample_jokes = [
@@ -318,7 +324,6 @@ def seed_demo_data():
                 author = users[author_name]
                 witness = users[witness_name]
                 
-                # 이미 비슷한 개그가 없으면 추가
                 existing = Attempt.query.filter_by(user_id=author.id, joke_content=joke).first()
                 if not existing:
                     att = Attempt(

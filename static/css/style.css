@@ -1,0 +1,516 @@
+/* ==========================================================================
+   아재개그 서바이벌 - KakaoTalk In-App Mobile Browser Responsive Styling
+   ========================================================================== */
+
+:root {
+  --vh: 1vh;
+  --bg-primary: #0b0f19;
+  --bg-card: rgba(22, 30, 49, 0.75);
+  --bg-card-hover: rgba(30, 41, 67, 0.85);
+  --bg-modal: #111827;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --primary-red: #ef4444;
+  --primary-red-glow: rgba(239, 68, 68, 0.3);
+  --accent-gold: #fbbf24;
+  --accent-silver: #94a3b8;
+  --accent-bronze: #d97706;
+  --accent-green: #10b981;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --shadow-main: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  --font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  height: calc(var(--vh, 1vh) * 100);
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  font-family: var(--font-family);
+  overflow: hidden;
+  position: fixed;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+  background: radial-gradient(circle at top right, rgba(239, 68, 68, 0.15), transparent 40%),
+              radial-gradient(circle at bottom left, rgba(251, 191, 36, 0.1), transparent 40%),
+              var(--bg-primary);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+}
+
+/* Header */
+.app-header {
+  height: 60px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  backdrop-filter: blur(12px);
+  background: rgba(11, 15, 25, 0.8);
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.brand-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ef4444, #fbbf24);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.user-badge-header {
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+/* Content Viewport */
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+  padding-bottom: 85px; /* space for bottom nav */
+  -webkit-overflow-scrolling: touch;
+}
+
+.tab-pane {
+  display: none;
+  animation: fadeIn 0.25s ease-in-out;
+}
+
+.tab-pane.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Bottom Navigation Bar */
+.bottom-nav {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 70px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 100;
+  padding-bottom: max(0px, env(safe-area-inset-bottom));
+}
+
+.nav-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+  width: 25%;
+  transition: all 0.2s ease;
+}
+
+.nav-btn .nav-icon {
+  font-size: 1.3rem;
+}
+
+.nav-btn.active {
+  color: var(--primary-red);
+}
+
+.nav-btn.active .nav-icon {
+  transform: scale(1.15);
+}
+
+.nav-badge {
+  position: absolute;
+  top: -2px;
+  right: 22px;
+  background: var(--primary-red);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 10px;
+  box-shadow: 0 0 10px var(--primary-red-glow);
+  display: none;
+}
+
+/* Cards & Components */
+.card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-main);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* User Summary Bar */
+.user-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stat-box {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  text-align: center;
+}
+
+.stat-box .val {
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin-top: 4px;
+}
+
+.stat-box.pepper .val { color: #f87171; }
+.stat-box.fine .val { color: #f59e0b; }
+
+/* Ranking List */
+.rank-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+  transition: transform 0.2s ease;
+}
+
+.rank-item.rank-1 {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(22, 30, 49, 0.8));
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+.rank-item.rank-2 {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.15), rgba(22, 30, 49, 0.8));
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.rank-item.rank-3 {
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.15), rgba(22, 30, 49, 0.8));
+  border-color: rgba(217, 119, 6, 0.4);
+}
+
+.rank-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rank-number {
+  font-size: 1.1rem;
+  font-weight: 900;
+  width: 24px;
+  text-align: center;
+}
+
+.rank-user-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.award-tag {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--accent-gold);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rank-right {
+  text-align: right;
+}
+
+.rank-score {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--primary-red);
+}
+
+.rank-meta {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* Forms & Controls */
+.form-group {
+  margin-bottom: 14px;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+}
+
+.form-control, .form-select {
+  width: 100%;
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+textarea.form-control {
+  resize: vertical;
+  min-height: 90px;
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: var(--primary-red);
+  box-shadow: 0 0 10px var(--primary-red-glow);
+}
+
+.btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  box-shadow: 0 4px 15px var(--primary-red-glow);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-main);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+/* Modals & Full Screen Login */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  background: var(--bg-modal);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.9);
+}
+
+/* Pledge Box */
+.pledge-box {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #cbd5e1;
+  margin-bottom: 16px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.pledge-article-title {
+  font-weight: 700;
+  color: #f87171;
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+
+/* Signature Pad */
+.signature-container {
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.signature-canvas {
+  width: 100%;
+  height: 140px;
+  background: #ffffff;
+  border: 2px dashed #94a3b8;
+  border-radius: var(--radius-sm);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.signature-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+/* Reaction Selector Grid */
+.reaction-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.reaction-btn {
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.reaction-btn.selected {
+  border-color: var(--primary-red);
+  background: rgba(239, 68, 68, 0.15);
+  box-shadow: 0 0 10px var(--primary-red-glow);
+}
+
+.reaction-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.reaction-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Signed Pledge Card Viewer */
+.signed-pledge-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.signed-pledge-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+
+.signature-img-preview {
+  max-width: 100%;
+  height: 60px;
+  object-fit: contain;
+  background: white;
+  border-radius: 4px;
+  margin-top: 6px;
+  padding: 4px;
+}

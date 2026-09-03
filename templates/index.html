@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>아재개그 서바이벌 모바일 대시보드</title>
+    <!-- KakaoTalk In-App Browser & PWA Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- Google Fonts & Chart.js -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- App CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div id="app">
+        <!-- App Header -->
+        <header class="app-header">
+            <div class="brand-title">
+                <span>🌶️</span> 아재개그 서바이벌
+            </div>
+            <div class="user-badge-header" id="userHeaderBtn" onclick="openLoginModal()">
+                <span id="headerUserName">로그인 필요</span> 👤
+            </div>
+        </header>
+
+        <!-- Main Viewport -->
+        <main class="main-content">
+            <!-- TAB 1: Dashboard & Ranking -->
+            <section id="tab-dashboard" class="tab-pane active">
+                <!-- User Summary Box -->
+                <div class="user-summary-grid">
+                    <div class="stat-box pepper">
+                        <div class="lbl">내 고추 (🌶️)</div>
+                        <div class="val" id="myPepperCount">0개</div>
+                    </div>
+                    <div class="stat-box fine">
+                        <div class="lbl">누적 벌금 (원)</div>
+                        <div class="val" id="myFineAmount">0원</div>
+                    </div>
+                </div>
+
+                <!-- 1~6th Real-time Ranking Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">🏆 실시간 랭킹 & 시상대</div>
+                        <button class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem;" onclick="loadDashboard()">🔄 새로고침</button>
+                    </div>
+                    <div id="rankingListContainer">
+                        <!-- Dynamic Rankings -->
+                        <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                            랭킹 데이터를 불러오는 중...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Daily Score Activity Chart -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">📊 일별 시도 & 스코어링 현황</div>
+                    </div>
+                    <div style="height: 180px; position: relative;">
+                        <canvas id="dailyActivityChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recent Joke Feed -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">🔥 최근 개그 시도 피드</div>
+                    </div>
+                    <div id="recentFeedContainer">
+                        <div style="text-align: center; padding: 15px; color: var(--text-muted);">
+                            최근 시도 내역이 없습니다.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: Joke Submission Form -->
+            <section id="tab-attempt" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">🌶️ 아재개그 시도 제출</div>
+                    </div>
+                    <form id="attemptForm" onsubmit="submitAttempt(event)">
+                        <div class="form-group">
+                            <label class="form-label">개그 내용</label>
+                            <textarea class="form-label form-control" id="jokeContent" placeholder="여성을 대상으로 던진 아재개그를 작성하세요. (예: 세상에서 가장 가난한 왕은? 최저임금)" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">타겟 이름 (여성)</label>
+                            <input type="text" class="form-control" id="targetName" placeholder="예: 김과장님, 이대리님" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">현장 참관 증인 (본인 제외 5인 중 1인)</label>
+                            <select class="form-select" id="witnessSelect" required>
+                                <option value="">증인을 선택하세요...</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top: 10px;">
+                            🚀 증인에게 제출하기 (대기열 전송)
+                        </button>
+                    </form>
+                </div>
+
+                <div class="card" style="background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.3);">
+                    <div style="font-size:0.85rem; line-height:1.5;">
+                        <strong style="color: #f87171;">💡 제출 후 팁</strong><br>
+                        제출된 개그는 지정된 증인이 승인(Approve)하고 리액션을 선택해야만 실제 점수, 🌶️ 고추 아이콘, 벌금이 실시간 DB에 반영됩니다!
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: Witness Approval Queue -->
+            <section id="tab-witness" class="tab-pane">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">👁️ 증인 승인 대기열</div>
+                        <button class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem;" onclick="loadPendingWitnessQueue()">🔄 새로고침</button>
+                    </div>
+                    <div id="pendingQueueContainer">
+                        <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                            승인 대기 중인 항목이 없습니다.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: Fine Ledger & Signed Pledges -->
+            <section id="tab-pledges" class="tab-pane">
+                <!-- Cumulative Fines Summary -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">💰 회원별 누적 벌금 내역</div>
+                    </div>
+                    <div id="fineLedgerContainer">
+                        <div style="text-align: center; padding: 15px; color: var(--text-muted);">
+                            벌금 집계 중...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6 Members Signed Pledge Viewer -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">📜 회원 서약서 & 서명 열람</div>
+                    </div>
+                    <div id="signedPledgesList" class="signed-pledge-grid">
+                        <div style="text-align: center; padding: 15px; color: var(--text-muted);">
+                            서약서 데이터를 불러오는 중...
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Bottom Navigation Bar -->
+        <nav class="bottom-nav">
+            <button class="nav-btn active" onclick="switchTab('dashboard')">
+                <span class="nav-icon">🏆</span>
+                <span>랭킹</span>
+            </button>
+            <button class="nav-btn" onclick="switchTab('attempt')">
+                <span class="nav-icon">🌶️</span>
+                <span>시도하기</span>
+            </button>
+            <button class="nav-btn" onclick="switchTab('witness')">
+                <span class="nav-icon">👁️</span>
+                <span>증인승인</span>
+                <span class="nav-badge" id="pendingQueueBadge">0</span>
+            </button>
+            <button class="nav-btn" onclick="switchTab('pledges')">
+                <span class="nav-icon">📜</span>
+                <span>벌금/서약서</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- LOGIN & PLEDGE AGREEMENT MODAL -->
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal-card">
+            <h2 style="font-size: 1.2rem; font-weight: 800; margin-bottom: 12px; text-align: center; color: var(--primary-red);">
+                🔒 아재개그 서바이벌 비밀 유지 및 서약서
+            </h2>
+
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label class="form-label">참여자 이름 선택 (6인 회원 전용)</label>
+                <select class="form-select" id="loginUserSelect">
+                    <option value="">이름을 선택하세요...</option>
+                    <option value="강득헌">강득헌</option>
+                    <option value="오용택">오용택</option>
+                    <option value="정상훈">정상훈</option>
+                    <option value="지정수">지정수</option>
+                    <option value="채연석">채연석</option>
+                    <option value="임형채">임형채</option>
+                </select>
+            </div>
+
+            <!-- Pledge Text Box -->
+            <div class="pledge-box">
+                <div style="font-weight: 800; text-align: center; margin-bottom: 8px; color: white;">
+                    [참여 동의서 ; 아재개그 서바이벌 비밀 유지 및 서약서]
+                </div>
+                본인은 '아재개그 서바이벌(이하 본 대회)'에 참가하는 회원 6인 중 1명으로서, 대상자의 순수한 반응(찐웃음 및 정색)을 얻어내어 공정한 게임을 진행하기 위해 다음 사항을 철저히 준수할 것을 맹세합니다.<br><br>
+
+                <div class="pledge-article-title">제1조 (존재 부정의 원칙)</div>
+                본 대회의 존재, 점수 산정 방식, 연말 시상식 등 게임과 관련된 일체의 정보를 타겟(여성) 및 주변 비참여 인원에게 어떤 상황에서도 발설하지 않는다. 술자리에서의 실언이나 "사실 우리 내기 중이야"와 같은 변명도 엄격히 금지한다.<br>
+
+                <div class="pledge-article-title">제2조 (메소드 연기 및 위장)</div>
+                아재개그 시도 시, 점수를 따기 위해 억지로 던지는 것이 아니라 '원래 유머를 즐기는 유쾌하고 여유로운 사람'인 것처럼 철저히 연기한다. 개그가 실패하여 분위기가 싸늘해지더라도 게임을 핑계 대지 않고 본인의 순수한 타격으로 온전히 받아들인다.<br>
+
+                <div class="pledge-article-title">제3조 (증인의 자연스러운 동화)</div>
+                현장을 참관하는 증인은 점수 판독관처럼 행동해서는 안 되며, 우연히 자리에 함께 있는 동료로 완벽히 위장한다. 대상자 앞에서 노골적으로 메모를 하거나, 시도자와 은밀한 눈빛 교환, 킥킥거리는 등 의심을 살 만한 어설픈 행동을 일절 금지한다.<br>
+
+                <div class="pledge-article-title">제4조 (기밀 누설 시 치명적 페널티)</div>
+                고의 또는 과실로 본 대회의 존재가 외부로 발각되어 대상자들의 리액션에 오염(의도적 무시, 억지웃음, 방어적 정색 등)이 발생할 경우, 최초 유출자는 그 즉시 누적 점수 -100점 감점 처리를 받으며, 연말 결산 회식 비용의 50%를 징벌적 배상금으로 부담한다.<br>
+
+                <div class="pledge-article-title">제5조 (선 넘기 금지 및 징벌적 벌금)</div>
+                본 대회는 유쾌함을 목적으로 하므로 상대방을 불쾌하게 만드는 행위를 엄격히 규제하며 아래의 벌금 규정을 따른다.<br>
+                - <strong>레드카드 (외모 및 성적 비하)</strong>: 어떠한 경우에도 외모 비하 및 성적 비하가 포함된 개그는 시도하지 않는다. 이를 위반할 경우 즉각 벌금 10,000원이 부과되며, 해당 시도의 점수는 전면 무효 처리된다.<br>
+                - <strong>치명타 (감정 상해)</strong>: 무리하거나 선을 넘는 시도로 인해 대상자(여성)의 마음을 상하게 하여 명백한 불쾌감을 유발한 경우, 규정된 게임 점수 감점(-30점)과 별도로 1회당 벌금 2,000원을 의무적으로 납부한다.<br><br>
+
+                위 사항을 모두 숙지하였으며, 만약 기밀을 누설하거나 금기 사항을 위반할 경우 어떠한 가혹한 처벌과 벌금도 달게 받을 것을 서약합니다.<br><br>
+
+                <div style="text-align: right; font-weight: 700; color: #fbbf24;" id="pledgeDateDisplay">
+                    2026년 9월 3일
+                </div>
+            </div>
+
+            <!-- Digital Signature Canvas -->
+            <div class="signature-container">
+                <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: var(--text-muted);">
+                    ✍️ 아래 영역에 손가락 또는 마우스로 직접 서명하세요:
+                </div>
+                <canvas id="signatureCanvas" class="signature-canvas"></canvas>
+                <div class="signature-actions">
+                    <button type="button" class="btn btn-outline" style="padding:4px 12px; font-size:0.75rem;" onclick="clearSignatureCanvas()">✏️ 서명 지우기</button>
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-primary" onclick="confirmLoginAndPledge()">
+                ✍️ [동의합니다] 및 대시보드 진입
+            </button>
+        </div>
+    </div>
+
+    <!-- WITNESS REACTION REVIEW MODAL -->
+    <div class="modal-overlay" id="reviewModal">
+        <div class="modal-card">
+            <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 12px; color: white;" id="reviewModalTitle">
+                👁️ 증인 판정 및 리액션 확정
+            </h3>
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;" id="reviewJokePreview">
+                <!-- Preview joke content -->
+            </div>
+
+            <div class="form-label">타겟의 실제 반응 선택:</div>
+            <div class="reaction-grid">
+                <div class="reaction-btn" onclick="selectReaction('SUCCESS')" id="btnReactionSUCCESS">
+                    <div class="reaction-title">😄 찐웃음 (성공)</div>
+                    <div class="reaction-sub">+15점 추가 (총 +20점, 🌶️ 1개)</div>
+                </div>
+                <div class="reaction-btn" onclick="selectReaction('FAILURE')" id="btnReactionFAILURE">
+                    <div class="reaction-title">😐 무반응 (실패)</div>
+                    <div class="reaction-sub">추가 점수 없음 (총 +5점, 🌶️ 1개)</div>
+                </div>
+                <div class="reaction-btn" onclick="selectReaction('CRITICAL')" id="btnReactionCRITICAL">
+                    <div class="reaction-title">😡 불쾌감 (치명타)</div>
+                    <div class="reaction-sub">-30점 (총 -25점), 🌶️ 차감, 벌금 2천원</div>
+                </div>
+                <div class="reaction-btn" onclick="selectReaction('REDCARD')" id="btnReactionREDCARD">
+                    <div class="reaction-title">🟥 레드카드 (비하)</div>
+                    <div class="reaction-sub">점수 무효 (0점), 즉각 벌금 1만원</div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button type="button" class="btn btn-outline" style="flex:1;" onclick="closeReviewModal()">취소</button>
+                <button type="button" class="btn btn-primary" style="flex:2;" onclick="submitReviewAction('APPROVE')">✅ 승인 확정</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- App JS -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

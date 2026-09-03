@@ -37,14 +37,12 @@ def init_db():
     """데이터베이스 및 기본 6인 사용자 초기화"""
     with app.app_context():
         db.create_all()
-        # 6명 사용자 기본 생성
         for name in MEMBERS:
             user = User.query.filter_by(name=name).first()
             if not user:
                 db.session.add(User(name=name))
         db.session.commit()
 
-# 앱 실행 직전 DB 초기화
 init_db()
 
 @app.route('/')
@@ -125,7 +123,7 @@ def list_pledges():
 
 @app.route('/api/attempts/create', methods=['POST'])
 def create_attempt():
-    """개그 시도 제출 (시도자)"""
+    """개그 시도 제출 (시도자 - 선택한 날짜 반영)"""
     user_name = session.get('user_name')
     data = request.get_json() or {}
     
@@ -139,6 +137,7 @@ def create_attempt():
     witness_name = data.get('witness_name')
     target_name = data.get('target_name', '').strip()
     joke_content = data.get('joke_content', '').strip()
+    attempt_date = data.get('attempt_date') or datetime.now().strftime('%Y-%m-%d')
     
     if not witness_name or not target_name or not joke_content:
         return jsonify({'success': False, 'message': '개그 내용, 타겟 이름, 현장 증인을 모두 입력해주세요.'}), 400
@@ -155,6 +154,7 @@ def create_attempt():
         witness_id=witness.id,
         target_name=target_name,
         joke_content=joke_content,
+        attempt_date=attempt_date,
         status='PENDING'
     )
     db.session.add(attempt)
@@ -210,20 +210,19 @@ def review_attempt():
         attempt.status = 'APPROVED'
         attempt.reaction = reaction
         
-        # 행동 기반 점수 및 벌금 로직
-        if reaction == 'SUCCESS':  # 찐웃음 (추가 +15점, 총 +20점)
+        if reaction == 'SUCCESS':  # 찐웃음 (+20점, 🌶️ 1개)
             attempt.points_awarded = 20
             attempt.pepper_delta = 1
             attempt.fine_amount = 0
-        elif reaction == 'FAILURE':  # 무반응 (추가 점수 없음, 총 +5점)
+        elif reaction == 'FAILURE':  # 무반응 (+5점, 🌶️ 1개)
             attempt.points_awarded = 5
             attempt.pepper_delta = 1
             attempt.fine_amount = 0
-        elif reaction == 'CRITICAL':  # 치명타 (불쾌감: -30점, 총 -25점, 고추 아이콘 차감/0, 벌금 2,000원)
+        elif reaction == 'CRITICAL':  # 불쾌감 (-25점, 🌶️ 0개, 벌금 2,000원)
             attempt.points_awarded = -25
             attempt.pepper_delta = 0
             attempt.fine_amount = 2000
-        elif reaction == 'REDCARD':  # 레드카드 (외모/성적 비하: 시도 점수 무효화 0점, 벌금 10,000원)
+        elif reaction == 'REDCARD':  # 레드카드 (0점, 벌금 10,000원)
             attempt.points_awarded = 0
             attempt.pepper_delta = 0
             attempt.fine_amount = 10000
@@ -239,7 +238,7 @@ def review_attempt():
 
 @app.route('/api/dashboard/summary', methods=['GET'])
 def dashboard_summary():
-    """랭킹, 상장, 고추 개수, 벌금 총액, 시도 내역 집계 반환"""
+    """랭킹, 상장, 고추 개수, 벌금 총액, 날짜별 시도 내역 집계 반환"""
     users = User.query.all()
     
     stats = {}
@@ -272,23 +271,22 @@ def dashboard_summary():
             elif att.reaction == 'REDCARD':
                 s['redcard_count'] += 1
                 
-    # MEMBERS 기본 정의 순서 기반 초기 정렬 후 점수순 정렬 (초기 0점 시 MEMBERS 순서 유지)
     ranking_list = sorted(list(stats.values()), key=lambda x: (x['total_score'], x['success_count'], -MEMBERS.index(x['name'])), reverse=True)
     
-    # 1~6등 상장 매칭
     for idx, member in enumerate(ranking_list):
         rank = idx + 1
         award_info = AWARDS.get(rank, {'title': '참여상', 'emoji': '✨', 'badge': f'{rank}등'})
         member['rank'] = rank
         member['award'] = award_info
         
-    # 최근 시도 내역 (최신 15개)
-    recent_attempts = Attempt.query.order_by(Attempt.created_at.desc()).limit(15).all()
+    recent_attempts = Attempt.query.order_by(Attempt.created_at.desc()).limit(20).all()
     
-    # 날짜별 점수 및 참여 현황 (최근 7일/평일 집계)
+    # 날짜별 점수 및 참여 현황 (선택한 시도 일자 기준 집계)
     daily_stats = {}
     for att in approved_attempts:
-        date_key = att.created_at.strftime('%m-%d')
+        raw_date = att.attempt_date or att.created_at.strftime('%Y-%m-%d')
+        # MM-DD 포맷 변환
+        date_key = raw_date[-5:] if len(raw_date) >= 10 else raw_date
         if date_key not in daily_stats:
             daily_stats[date_key] = {'attempts': 0, 'score': 0, 'fines': 0}
         daily_stats[date_key]['attempts'] += 1

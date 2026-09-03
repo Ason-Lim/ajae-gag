@@ -18,13 +18,14 @@ document.addEventListener('DOMContentLoaded', () => {
     initSignatureCanvas();
     checkLoginSession();
     setupPledgeDate();
+    initAttemptDatePicker();
     
     // 5초마다 대기열 카운트 동기화
     setInterval(updatePendingBadge, 5000);
 });
 
 /* --------------------------------------------------------------------------
-   1. KakaoTalk In-App Browser Dynamic Viewport Height Fix
+   1. KakaoTalk In-App Browser Dynamic Viewport Height Fix & Date Picker
    -------------------------------------------------------------------------- */
 function initViewport() {
     function setVh() {
@@ -44,6 +45,14 @@ function setupPledgeDate() {
     }
 }
 
+function initAttemptDatePicker() {
+    const dateInput = document.getElementById('attemptDate');
+    if (dateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.value = today;
+    }
+}
+
 /* --------------------------------------------------------------------------
    2. HTML5 Digital Signature Canvas
    -------------------------------------------------------------------------- */
@@ -52,7 +61,6 @@ function initSignatureCanvas() {
     if (!canvas) return;
     ctx = canvas.getContext('2d');
     
-    // High DPI Canvas Scaling
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * 2;
     canvas.height = rect.height * 2;
@@ -93,7 +101,6 @@ function initSignatureCanvas() {
         isDrawing = false;
     }
     
-    // Mouse & Touch events
     canvas.addEventListener('mousedown', startDraw);
     canvas.addEventListener('mousemove', moveDraw);
     canvas.addEventListener('mouseup', stopDraw);
@@ -147,7 +154,6 @@ function confirmLoginAndPledge() {
     
     const signatureData = canvas.toDataURL('image/png');
     
-    // Login API
     fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -156,7 +162,6 @@ function confirmLoginAndPledge() {
     .then(res => res.json())
     .then(data => {
         if (data.success) {
-            // Sign Pledge API
             return fetch('/api/pledge/sign', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -188,10 +193,7 @@ function loginUser(userName) {
     localStorage.setItem('ajae_user_name', userName);
     document.getElementById('headerUserName').innerText = userName;
     
-    // Update witness dropdown (exclude self)
     updateWitnessDropdown();
-    
-    // Load initial dashboard data (0 points initially)
     loadDashboard();
     updatePendingBadge();
 }
@@ -231,6 +233,7 @@ function switchTab(tabName) {
     }
     
     if (tabName === 'dashboard') loadDashboard();
+    if (tabName === 'attempt') initAttemptDatePicker();
     if (tabName === 'witness') loadPendingWitnessQueue();
     if (tabName === 'pledges') loadPledgesAndFines();
 }
@@ -375,11 +378,13 @@ function renderRecentFeed(attempts) {
             statusBadge = '<span style="color:#dc2626; font-weight:800;">🟥 레드카드 (무효, 벌금 1만원)</span>';
         }
         
+        const displayDate = att.attempt_date || att.created_date_str;
+        
         html += `
             <div style="padding:10px 0; border-bottom:1px solid var(--border-color); font-size:0.85rem;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                     <strong>${att.author_name} ➔ ${att.target_name}</strong>
-                    <span style="font-size:0.75rem; color:var(--text-muted);">${att.created_date_str} (증인: ${att.witness_name})</span>
+                    <span style="font-size:0.75rem; color:var(--accent-gold); font-weight:600;">📅 ${displayDate} (증인: ${att.witness_name})</span>
                 </div>
                 <div style="color:#cbd5e1; margin-bottom:4px;">"${att.joke_content}"</div>
                 <div>${statusBadge}</div>
@@ -390,7 +395,7 @@ function renderRecentFeed(attempts) {
 }
 
 /* --------------------------------------------------------------------------
-   6. Submit Attempt (시도자)
+   6. Submit Attempt (시도자 - 날짜 포함)
    -------------------------------------------------------------------------- */
 function submitAttempt(event) {
     event.preventDefault();
@@ -403,6 +408,7 @@ function submitAttempt(event) {
     const jokeContent = document.getElementById('jokeContent').value;
     const targetName = document.getElementById('targetName').value;
     const witnessName = document.getElementById('witnessSelect').value;
+    const attemptDate = document.getElementById('attemptDate').value;
     
     fetch('/api/attempts/create', {
         method: 'POST',
@@ -411,14 +417,16 @@ function submitAttempt(event) {
             author_name: currentUser,
             joke_content: jokeContent,
             target_name: targetName,
-            witness_name: witnessName
+            witness_name: witnessName,
+            attempt_date: attemptDate
         })
     })
     .then(res => res.json())
     .then(data => {
         if (data.success) {
-            alert(`🌶️ 개그 시도가 제출되었습니다!\n증인 [${witnessName}] 님의 승인을 기다립니다.`);
+            alert(`🌶️ 개그 시도 (${attemptDate})가 제출되었습니다!\n증인 [${witnessName}] 님의 승인을 기다립니다.`);
             document.getElementById('attemptForm').reset();
+            initAttemptDatePicker();
             switchTab('dashboard');
         } else {
             alert(data.message || '제출에 실패했습니다.');
@@ -475,18 +483,19 @@ function renderPendingQueue(pendingList) {
     
     let html = '';
     pendingList.forEach(item => {
+        const displayDate = item.attempt_date || item.created_date_str;
         html += `
             <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:12px; margin-bottom:12px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.85rem;">
                     <strong style="color:var(--accent-gold);">시도자: ${item.author_name} (타겟: ${item.target_name})</strong>
-                    <span style="font-size:0.75rem; color:var(--text-muted);">${item.created_date_str}</span>
+                    <span style="font-size:0.75rem; color:#f87171; font-weight:700;">📅 시도일: ${displayDate}</span>
                 </div>
                 <div style="font-size:0.95rem; color:#f8fafc; margin-bottom:10px; padding:8px; background:rgba(0,0,0,0.3); border-radius:6px;">
                     "${item.joke_content}"
                 </div>
                 <div style="display:flex; gap:10px;">
                     <button class="btn btn-outline" style="flex:1; padding:8px; font-size:0.8rem;" onclick="rejectAttemptDirect(${item.id})">❌ 반려</button>
-                    <button class="btn btn-primary" style="flex:2; padding:8px; font-size:0.8rem;" onclick="openReviewModal(${item.id}, '${item.author_name}', '${item.target_name}', '${escapeQuotes(item.joke_content)}')">✅ 반응 선택 & 승인</button>
+                    <button class="btn btn-primary" style="flex:2; padding:8px; font-size:0.8rem;" onclick="openReviewModal(${item.id}, '${item.author_name}', '${item.target_name}', '${escapeQuotes(item.joke_content)}', '${displayDate}')">✅ 반응 선택 & 승인</button>
                 </div>
             </div>
         `;
@@ -498,14 +507,14 @@ function escapeQuotes(str) {
     return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
-function openReviewModal(attemptId, authorName, targetName, jokeContent) {
+function openReviewModal(attemptId, authorName, targetName, jokeContent, attemptDate) {
     currentReviewAttemptId = attemptId;
     selectedReaction = null;
     
     document.querySelectorAll('.reaction-btn').forEach(btn => btn.classList.remove('selected'));
     
     document.getElementById('reviewJokePreview').innerHTML = `
-        <strong>[${authorName} ➔ ${targetName}]</strong><br>"${jokeContent}"
+        <strong>[${authorName} ➔ ${targetName}] (📅 시도일: ${attemptDate})</strong><br>"${jokeContent}"
     `;
     
     document.getElementById('reviewModal').classList.add('active');

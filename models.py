@@ -52,6 +52,7 @@ class Attempt(db.Model):
     witness_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     target_name = db.Column(db.String(50), nullable=False)
     joke_content = db.Column(db.Text, nullable=False)
+    attempt_date = db.Column(db.String(20), nullable=True)  # 개그 시도 선택 날짜 (YYYY-MM-DD)
     
     # 처리 상태: PENDING (대기), APPROVED (승인됨), REJECTED (반려됨)
     status = db.Column(db.String(20), default='PENDING', nullable=False)
@@ -68,6 +69,7 @@ class Attempt(db.Model):
     reviewed_at = db.Column(db.DateTime, nullable=True)
 
     def to_dict(self):
+        att_date = self.attempt_date or self.created_at.strftime('%Y-%m-%d')
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -76,12 +78,13 @@ class Attempt(db.Model):
             'witness_name': self.witness.name if self.witness else '',
             'target_name': self.target_name,
             'joke_content': self.joke_content,
+            'attempt_date': att_date,
             'status': self.status,
             'reaction': self.reaction,
             'points_awarded': self.points_awarded,
             'pepper_delta': self.pepper_delta,
             'fine_amount': self.fine_amount,
             'created_at': self.created_at.isoformat(),
-            'created_date_str': self.created_at.strftime('%Y-%m-%d'),
+            'created_date_str': att_date,
             'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None
         }

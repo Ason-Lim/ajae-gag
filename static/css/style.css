@@ -100,7 +100,7 @@ body, html {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 16px;
-  padding-bottom: 85px; /* space for bottom nav */
+  padding-bottom: 85px;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -192,6 +192,7 @@ body, html {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   margin-bottom: 12px;
 }
 
@@ -200,7 +201,17 @@ body, html {
   font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  white-space: nowrap; /* 제목 두줄 분리 방지 */
+  flex-shrink: 0;
+}
+
+.btn-refresh {
+  padding: 4px 8px !important;
+  font-size: 0.72rem !important;
+  width: auto !important;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* User Summary Bar */

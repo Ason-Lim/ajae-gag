@@ -278,7 +278,7 @@ function renderRankings(rankings) {
         const award = item.award || { emoji: '✨', title: '상장', badge: '' };
         
         html += `
-            <div class="rank-item ${rankClass}">
+            <div class="rank-item ${rankClass}" onclick="openMemberDetailModal('${item.name}')" style="cursor:pointer;" title="클릭하여 날짜별 고추 내역 보기">
                 <div class="rank-left">
                     <div class="rank-number">${item.rank}</div>
                     <div>
@@ -293,12 +293,66 @@ function renderRankings(rankings) {
                 </div>
                 <div class="rank-right">
                     <div class="rank-score">${item.total_score}점</div>
-                    <div class="rank-meta">${award.badge}</div>
+                    <div class="rank-meta">${award.badge} 🔍</div>
                 </div>
             </div>
         `;
     });
     container.innerHTML = html;
+}
+
+/* Member Pepper & Date Detail Modal */
+function openMemberDetailModal(userName) {
+    fetch(`/api/members/detail?user_name=${encodeURIComponent(userName)}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('detailModalTitle').innerText = `🌶️ [${data.user_name}] 님의 날짜별 내역`;
+                document.getElementById('detailTotalPepper').innerText = `${data.total_peppers}개`;
+                document.getElementById('detailTotalScoreFine').innerText = `${data.total_score}점 / ${data.total_fine.toLocaleString()}원`;
+                
+                const container = document.getElementById('memberDetailContainer');
+                if (!data.daily_peppers || data.daily_peppers.length === 0) {
+                    container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">획득한 고추 시도 내역이 없습니다.</div>';
+                } else {
+                    let html = '';
+                    data.daily_peppers.forEach(dp => {
+                        html += `
+                            <div style="background:rgba(255,255,255,0.04); border:1px solid var(--border-color); border-radius:8px; padding:10px; margin-bottom:10px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.08);">
+                                    <strong style="color:var(--accent-gold); font-size:0.9rem;">📅 ${dp.date}</strong>
+                                    <span style="color:#f87171; font-weight:800; font-size:0.9rem;">🌶️ +${dp.pepper_count}개 (${dp.total_score}점)</span>
+                                </div>
+                        `;
+                        
+                        dp.attempts.forEach(att => {
+                            let reactionText = '';
+                            if (att.reaction === 'SUCCESS') reactionText = '😄 찐웃음 (+20점, 🌶️ 1개)';
+                            else if (att.reaction === 'FAILURE') reactionText = '😐 무반응 (+5점, 🌶️ 1개)';
+                            else if (att.reaction === 'CRITICAL') reactionText = '😡 불쾌감 (-25점, 벌금 2천원)';
+                            else if (att.reaction === 'REDCARD') reactionText = '🟥 레드카드 (0점, 벌금 1만원)';
+                            
+                            html += `
+                                <div style="font-size:0.8rem; color:#cbd5e1; margin-top:4px; padding:4px 6px; background:rgba(0,0,0,0.2); border-radius:4px;">
+                                    <div><strong>🎯 타겟: ${att.target_name}</strong> (증인: ${att.witness_name})</div>
+                                    <div style="color:white; margin:2px 0;">"${att.joke_content}"</div>
+                                    <div style="font-size:0.75rem; color:#94a3b8;">${reactionText}</div>
+                                </div>
+                            `;
+                        });
+                        
+                        html += `</div>`;
+                    });
+                    container.innerHTML = html;
+                }
+                
+                document.getElementById('memberDetailModal').classList.add('active');
+            }
+        });
+}
+
+function closeMemberDetailModal() {
+    document.getElementById('memberDetailModal').classList.remove('active');
 }
 
 function renderActivityChart(dailyStats) {

@@ -57,6 +57,38 @@ def get_members():
     ordered_users = sorted(user_list, key=lambda x: MEMBERS.index(x['name']) if x['name'] in MEMBERS else 99)
     return jsonify({'success': True, 'members': ordered_users})
 
+@app.route('/api/members/detail', methods=['GET'])
+def get_member_detail():
+    """회원별 날짜별 고추 획득 내역 및 상세 기록 조회"""
+    user_name = request.args.get('user_name')
+    if not user_name:
+        return jsonify({'success': False, 'message': '회원 이름을 지정해주세요.'}), 400
+        
+    user = User.query.filter_by(name=user_name).first()
+    if not user:
+        return jsonify({'success': False, 'message': '회원을 찾을 수 없습니다.'}), 404
+        
+    approved_attempts = Attempt.query.filter_by(user_id=user.id, status='APPROVED').order_by(Attempt.attempt_date.desc(), Attempt.created_at.desc()).all()
+    
+    daily_peppers = {}
+    for att in approved_attempts:
+        d = att.attempt_date or att.created_at.strftime('%Y-%m-%d')
+        if d not in daily_peppers:
+            daily_peppers[d] = {'date': d, 'pepper_count': 0, 'total_score': 0, 'attempts': []}
+        daily_peppers[d]['pepper_count'] += att.pepper_delta
+        daily_peppers[d]['total_score'] += att.points_awarded
+        daily_peppers[d]['attempts'].append(att.to_dict())
+        
+    return jsonify({
+        'success': True,
+        'user_name': user.name,
+        'total_peppers': sum(a.pepper_delta for a in approved_attempts),
+        'total_score': sum(a.points_awarded for a in approved_attempts),
+        'total_fine': sum(a.fine_amount for a in approved_attempts),
+        'daily_peppers': list(daily_peppers.values()),
+        'attempts': [a.to_dict() for a in approved_attempts]
+    })
+
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     """사용자 이름으로 로그인 / 동의 여부 체크"""
@@ -187,8 +219,8 @@ def review_attempt():
     data = request.get_json() or {}
     
     attempt_id = data.get('attempt_id')
-    action = data.get('action')  # 'APPROVE' or 'REJECT'
-    reaction = data.get('reaction')  # 'SUCCESS', 'FAILURE', 'CRITICAL', 'REDCARD'
+    action = data.get('action')
+    reaction = data.get('reaction')
     
     attempt = Attempt.query.get(attempt_id)
     if not attempt:
@@ -210,19 +242,19 @@ def review_attempt():
         attempt.status = 'APPROVED'
         attempt.reaction = reaction
         
-        if reaction == 'SUCCESS':  # 찐웃음 (+20점, 🌶️ 1개)
+        if reaction == 'SUCCESS':
             attempt.points_awarded = 20
             attempt.pepper_delta = 1
             attempt.fine_amount = 0
-        elif reaction == 'FAILURE':  # 무반응 (+5점, 🌶️ 1개)
+        elif reaction == 'FAILURE':
             attempt.points_awarded = 5
             attempt.pepper_delta = 1
             attempt.fine_amount = 0
-        elif reaction == 'CRITICAL':  # 불쾌감 (-25점, 🌶️ 0개, 벌금 2,000원)
+        elif reaction == 'CRITICAL':
             attempt.points_awarded = -25
             attempt.pepper_delta = 0
             attempt.fine_amount = 2000
-        elif reaction == 'REDCARD':  # 레드카드 (0점, 벌금 10,000원)
+        elif reaction == 'REDCARD':
             attempt.points_awarded = 0
             attempt.pepper_delta = 0
             attempt.fine_amount = 10000
@@ -281,11 +313,9 @@ def dashboard_summary():
         
     recent_attempts = Attempt.query.order_by(Attempt.created_at.desc()).limit(20).all()
     
-    # 날짜별 점수 및 참여 현황 (선택한 시도 일자 기준 집계)
     daily_stats = {}
     for att in approved_attempts:
         raw_date = att.attempt_date or att.created_at.strftime('%Y-%m-%d')
-        # MM-DD 포맷 변환
         date_key = raw_date[-5:] if len(raw_date) >= 10 else raw_date
         if date_key not in daily_stats:
             daily_stats[date_key] = {'attempts': 0, 'score': 0, 'fines': 0}

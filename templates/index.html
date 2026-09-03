@@ -46,7 +46,10 @@
                 <!-- 1~6th Real-time Ranking Card -->
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">🏆 실시간 랭킹</div>
+                        <div>
+                            <div class="card-title">🏆 실시간 랭킹</div>
+                            <div style="font-size:0.72rem; color:var(--accent-gold); margin-top:2px;">👇 회원을 클릭하면 날짜별 고추 내역을 봅니다</div>
+                        </div>
                         <button class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem;" onclick="loadDashboard()">🔄 새로고침</button>
                     </div>
                     <div id="rankingListContainer">
@@ -182,6 +185,37 @@
                 <span>벌금/서약서</span>
             </button>
         </nav>
+    </div>
+
+    <!-- MEMBER PEPPER DETAIL MODAL -->
+    <div class="modal-overlay" id="memberDetailModal">
+        <div class="modal-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <h3 style="font-size: 1.1rem; font-weight: 800; color: white;" id="detailModalTitle">
+                    🌶️ 날짜별 고추 & 스코어 내역
+                </h3>
+                <button type="button" class="btn btn-outline" style="width:auto; padding:4px 10px; font-size:0.8rem;" onclick="closeMemberDetailModal()">닫기 ✖</button>
+            </div>
+            
+            <div class="user-summary-grid" style="margin-bottom:12px;">
+                <div class="stat-box pepper" style="padding:8px;">
+                    <div class="lbl" style="font-size:0.75rem;">누적 고추 (🌶️)</div>
+                    <div class="val" id="detailTotalPepper" style="font-size:1.1rem;">0개</div>
+                </div>
+                <div class="stat-box fine" style="padding:8px;">
+                    <div class="lbl" style="font-size:0.75rem;">누적 점수 / 벌금</div>
+                    <div class="val" id="detailTotalScoreFine" style="font-size:0.95rem;">0점 / 0원</div>
+                </div>
+            </div>
+
+            <div style="font-size:0.85rem; font-weight:700; color:var(--accent-gold); margin-bottom:8px;">
+                📅 날짜별 고추 획득 상세 기록:
+            </div>
+            
+            <div id="memberDetailContainer" style="max-height: 50vh; overflow-y: auto;">
+                <!-- Daily Pepper Breakdown Cards -->
+            </div>
+        </div>
     </div>
 
     <!-- LOGIN & PLEDGE AGREEMENT MODAL -->

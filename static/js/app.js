@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkLoginSession();
     setupPledgeDate();
     
-    // 3초마다 대기열 카운트 동기화
+    // 5초마다 대기열 카운트 동기화
     setInterval(updatePendingBadge, 5000);
 });
 
@@ -191,12 +191,9 @@ function loginUser(userName) {
     // Update witness dropdown (exclude self)
     updateWitnessDropdown();
     
-    // Load initial data
+    // Load initial dashboard data (0 points initially)
     loadDashboard();
     updatePendingBadge();
-    
-    // Auto seed demo data if dashboard is empty
-    fetch('/api/seed', { method: 'POST' }).then(() => loadDashboard());
 }
 
 function updateWitnessDropdown() {
@@ -222,7 +219,6 @@ function switchTab(tabName) {
     const targetPane = document.getElementById(`tab-${tabName}`);
     if (targetPane) targetPane.classList.add('active');
     
-    // Nav Button activation
     const btnMap = {
         'dashboard': 0,
         'attempt': 1,
@@ -234,7 +230,6 @@ function switchTab(tabName) {
         btns[btnMap[tabName]].classList.add('active');
     }
     
-    // Load tab content
     if (tabName === 'dashboard') loadDashboard();
     if (tabName === 'witness') loadPendingWitnessQueue();
     if (tabName === 'pledges') loadPledgesAndFines();
@@ -582,7 +577,6 @@ function rejectAttemptDirect(attemptId) {
    8. Fine Ledger & Signed Pledges Viewer
    -------------------------------------------------------------------------- */
 function loadPledgesAndFines() {
-    // 1. Load Dashboard Summary for Fines
     fetch('/api/dashboard/summary')
         .then(res => res.json())
         .then(data => {
@@ -591,7 +585,6 @@ function loadPledgesAndFines() {
             }
         });
         
-    // 2. Load Signed Pledges
     fetch('/api/pledge/list')
         .then(res => res.json())
         .then(data => {

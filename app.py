@@ -56,7 +56,6 @@ def get_members():
     """6명 회원 목록 및 서약 동의 여부 반환"""
     users = User.query.all()
     user_list = [u.to_dict() for u in users]
-    # MEMBERS 순서 유지
     ordered_users = sorted(user_list, key=lambda x: MEMBERS.index(x['name']) if x['name'] in MEMBERS else 99)
     return jsonify({'success': True, 'members': ordered_users})
 
@@ -212,7 +211,6 @@ def review_attempt():
         attempt.reaction = reaction
         
         # 행동 기반 점수 및 벌금 로직
-        # 기본 시도(참여): +5점, 고추 아이콘 1개
         if reaction == 'SUCCESS':  # 찐웃음 (추가 +15점, 총 +20점)
             attempt.points_awarded = 20
             attempt.pepper_delta = 1
@@ -274,8 +272,8 @@ def dashboard_summary():
             elif att.reaction == 'REDCARD':
                 s['redcard_count'] += 1
                 
-    # 랭킹 정렬 (점수 내림차순, 동일 시 성공 횟수 순)
-    ranking_list = sorted(list(stats.values()), key=lambda x: (x['total_score'], x['success_count']), reverse=True)
+    # MEMBERS 기본 정의 순서 기반 초기 정렬 후 점수순 정렬 (초기 0점 시 MEMBERS 순서 유지)
+    ranking_list = sorted(list(stats.values()), key=lambda x: (x['total_score'], x['success_count'], -MEMBERS.index(x['name'])), reverse=True)
     
     # 1~6등 상장 매칭
     for idx, member in enumerate(ranking_list):
@@ -304,57 +302,13 @@ def dashboard_summary():
         'daily_stats': daily_stats
     })
 
-@app.route('/api/seed', methods=['POST'])
-def seed_demo_data():
-    """시연용 샘플 데이터 생성 API"""
+@app.route('/api/admin/reset_scores', methods=['POST', 'GET'])
+def reset_scores():
+    """모든 개그 시도 내역 삭제 (초기 0점 상태 리셋)"""
     with app.app_context():
-        users = {u.name: u for u in User.query.all()}
-        
-        sample_jokes = [
-            ("강득헌", "오용택", "김과장님", "세상에서 가장 가난한 왕은? 최저임금", "SUCCESS"),
-            ("오용택", "정상훈", "이대리님", "왕이 넘어지면? 킹콩", "SUCCESS"),
-            ("정상훈", "지정수", "박팀장님", "신신애가 꾸는 꿈은? 신데렐라", "FAILURE"),
-            ("지정수", "채연석", "최사원님", "할아버지가 좋아하는 돈은? 할머니", "CRITICAL"),
-            ("채연석", "임형채", "윤주임님", "차를 타지 않는 사람은? 타지마할", "SUCCESS"),
-            ("임형채", "강득헌", "정대리님", "바나나가 웃으면? 바나나웃", "FAILURE"),
-        ]
-        
-        for author_name, witness_name, target, joke, reaction in sample_jokes:
-            if author_name in users and witness_name in users:
-                author = users[author_name]
-                witness = users[witness_name]
-                
-                existing = Attempt.query.filter_by(user_id=author.id, joke_content=joke).first()
-                if not existing:
-                    att = Attempt(
-                        user_id=author.id,
-                        witness_id=witness.id,
-                        target_name=target,
-                        joke_content=joke,
-                        status='APPROVED',
-                        reaction=reaction,
-                        reviewed_at=datetime.utcnow()
-                    )
-                    if reaction == 'SUCCESS':
-                        att.points_awarded = 20
-                        att.pepper_delta = 1
-                        att.fine_amount = 0
-                    elif reaction == 'FAILURE':
-                        att.points_awarded = 5
-                        att.pepper_delta = 1
-                        att.fine_amount = 0
-                    elif reaction == 'CRITICAL':
-                        att.points_awarded = -25
-                        att.pepper_delta = 0
-                        att.fine_amount = 2000
-                    elif reaction == 'REDCARD':
-                        att.points_awarded = 0
-                        att.pepper_delta = 0
-                        att.fine_amount = 10000
-                    db.session.add(att)
-                    
+        Attempt.query.delete()
         db.session.commit()
-    return jsonify({'success': True, 'message': '샘플 데이터가 성공적으로 생성되었습니다.'})
+    return jsonify({'success': True, 'message': '모든 시도 내역이 리셋되어 6명 회원의 초기 점수, 고추, 벌금이 0으로 변경되었습니다.'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

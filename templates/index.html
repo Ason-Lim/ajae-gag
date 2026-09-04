@@ -106,10 +106,13 @@
                             <input type="text" class="form-control" id="targetName" placeholder="예: 김과장님, 이대리님" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">현장 참관 증인 (본인 제외 5인 중 1인)</label>
-                            <select class="form-select" id="witnessSelect" required>
-                                <option value="">증인을 선택하세요...</option>
-                            </select>
+                            <label class="form-label">현장 참관 증인 (본인 제외 1명 이상 선택)</label>
+                            <div id="witnessCheckboxGroup" class="witness-checkbox-group" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:6px;">
+                                <!-- Dynamic multi-witness pills -->
+                            </div>
+                            <div style="font-size:0.72rem; color:var(--accent-gold); margin-top:6px;">
+                                💡 다수의 증인을 지정하면 증인들 리액션의 <strong>평균 점수</strong>가 최종 시도 점수로 반영됩니다!
+                            </div>
                         </div>
                         <button type="submit" class="btn btn-primary" style="margin-top: 10px;">
                             🚀 증인에게 제출하기 (대기열 전송)

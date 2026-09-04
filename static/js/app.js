@@ -316,17 +316,33 @@ function loginUser(userName) {
     updatePendingBadge();
 }
 
+let selectedWitnesses = [];
+
 function updateWitnessDropdown() {
-    const select = document.getElementById('witnessSelect');
-    if (!select) return;
-    select.innerHTML = '<option value="">증인을 선택하세요...</option>';
+    const container = document.getElementById('witnessCheckboxGroup');
+    if (!container) return;
+    container.innerHTML = '';
+    selectedWitnesses = [];
     
-    MEMBERS.filter(m => m !== currentUser).forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m;
-        opt.innerText = m;
-        select.appendChild(opt);
+    const availableMembers = MEMBERS.filter(m => m !== currentUser);
+    availableMembers.forEach(name => {
+        const pill = document.createElement('div');
+        pill.className = 'witness-pill';
+        pill.dataset.name = name;
+        pill.innerHTML = `<span>👤 ${name}</span>`;
+        pill.onclick = () => toggleWitnessSelection(name, pill);
+        container.appendChild(pill);
     });
+}
+
+function toggleWitnessSelection(name, pillEl) {
+    if (selectedWitnesses.includes(name)) {
+        selectedWitnesses = selectedWitnesses.filter(m => m !== name);
+        pillEl.classList.remove('selected');
+    } else {
+        selectedWitnesses.push(name);
+        pillEl.classList.add('selected');
+    }
 }
 
 /* --------------------------------------------------------------------------
@@ -572,6 +588,9 @@ function renderRecentFeed(attempts) {
 /* --------------------------------------------------------------------------
    6. Submit Attempt (시도자 - 날짜 포함)
    -------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------
+   6. Submit Attempt (시도자 - 다수 증인 지원)
+   -------------------------------------------------------------------------- */
 function submitAttempt(event) {
     event.preventDefault();
     if (!currentUser) {
@@ -582,8 +601,12 @@ function submitAttempt(event) {
     
     const jokeContent = document.getElementById('jokeContent').value;
     const targetName = document.getElementById('targetName').value;
-    const witnessName = document.getElementById('witnessSelect').value;
     const attemptDate = document.getElementById('attemptDate').value;
+    
+    if (!selectedWitnesses || selectedWitnesses.length === 0) {
+        alert('현장 참관 증인을 최소 1명 이상 선택해주세요.');
+        return;
+    }
     
     fetch('/api/attempts/create', {
         method: 'POST',
@@ -592,16 +615,17 @@ function submitAttempt(event) {
             author_name: currentUser,
             joke_content: jokeContent,
             target_name: targetName,
-            witness_name: witnessName,
+            witness_names: selectedWitnesses,
             attempt_date: attemptDate
         })
     })
     .then(res => res.json())
     .then(data => {
         if (data.success) {
-            alert(`🌶️ 개그 시도 (${attemptDate})가 제출되었습니다!\n증인 [${witnessName}] 님의 승인을 기다립니다.`);
+            alert(`🌶️ 개그 시도 (${attemptDate})가 제출되었습니다!\n지정 증인 [${selectedWitnesses.join(', ')}] 님의 승인을 기다립니다.`);
             document.getElementById('attemptForm').reset();
             initAttemptDatePicker();
+            updateWitnessDropdown();
             switchTab('witness');
         } else {
             alert(data.message || '제출에 실패했습니다.');
@@ -662,10 +686,11 @@ function renderPendingQueue(pendingList) {
     let html = '';
     pendingList.forEach(item => {
         const displayDate = item.attempt_date || item.created_date_str;
+        const progressText = item.total_witness_count > 1 ? ` (증인 현황: ${item.completed_witness_count}/${item.total_witness_count}명 판정 완료)` : '';
         html += `
             <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:12px; margin-bottom:12px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.85rem;">
-                    <strong style="color:var(--accent-gold);">시도자: ${escapeHtml(item.author_name)} (타겟: ${escapeHtml(item.target_name)})</strong>
+                    <strong style="color:var(--accent-gold);">시도자: ${escapeHtml(item.author_name)} (타겟: ${escapeHtml(item.target_name)})${progressText}</strong>
                     <span style="font-size:0.75rem; color:#f87171; font-weight:700;">📅 시도일: ${displayDate}</span>
                 </div>
                 <div style="font-size:0.95rem; color:#f8fafc; margin-bottom:10px; padding:8px; background:rgba(0,0,0,0.3); border-radius:6px; white-space:pre-wrap; word-break:break-word;">
@@ -817,19 +842,43 @@ function renderAttemptHistory() {
         filteredAttempts.forEach(att => {
             let statusBadgeHtml = '';
             if (att.status === 'PENDING') {
-                statusBadgeHtml = `<span style="background:rgba(251, 191, 36, 0.15); color:#fbbf24; border:1px solid rgba(251, 191, 36, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">⏳ 승인 대기중</span>`;
+                const countInfo = att.total_witness_count > 1 ? ` (${att.completed_witness_count}/${att.total_witness_count}명 완료)` : '';
+                statusBadgeHtml = `<span style="background:rgba(251, 191, 36, 0.15); color:#fbbf24; border:1px solid rgba(251, 191, 36, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">⏳ 승인 대기중${countInfo}</span>`;
             } else if (att.status === 'REJECTED') {
                 statusBadgeHtml = `<span style="background:rgba(148, 163, 184, 0.15); color:#94a3b8; border:1px solid rgba(148, 163, 184, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">❌ 증인 반려됨</span>`;
             } else if (att.status === 'APPROVED') {
-                if (att.reaction === 'SUCCESS') {
-                    statusBadgeHtml = `<span style="background:rgba(16, 185, 129, 0.15); color:#10b981; border:1px solid rgba(16, 185, 129, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">😄 찐웃음 (승인) (+20점, 🌶️)</span>`;
-                } else if (att.reaction === 'FAILURE') {
-                    statusBadgeHtml = `<span style="background:rgba(59, 130, 246, 0.15); color:#3b82f6; border:1px solid rgba(59, 130, 246, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">😐 무반응 (승인) (+5점, 🌶️)</span>`;
-                } else if (att.reaction === 'CRITICAL') {
-                    statusBadgeHtml = `<span style="background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">😡 불쾌감 (-25점, 벌금 2천원)</span>`;
-                } else if (att.reaction === 'REDCARD') {
-                    statusBadgeHtml = `<span style="background:rgba(220, 38, 38, 0.2); color:#dc2626; border:1px solid rgba(220, 38, 38, 0.5); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:800;">🟥 레드카드 (무효, 벌금 1만원)</span>`;
-                }
+                const avgTag = att.total_witness_count > 1 ? ' (평균)' : '';
+                statusBadgeHtml = `<span style="background:rgba(16, 185, 129, 0.15); color:#10b981; border:1px solid rgba(16, 185, 129, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">✅ 승인 완료${avgTag} (${att.points_awarded >= 0 ? '+' : ''}${att.points_awarded}점, 🌶️ ${att.pepper_delta}개)</span>`;
+            }
+            
+            let witnessDetailHtml = '';
+            if (att.witnesses_detail && att.witnesses_detail.length > 0) {
+                witnessDetailHtml += `<div style="font-size:0.78rem; color:#cbd5e1; margin-top:8px; border-top:1px dashed rgba(255,255,255,0.1); padding-top:6px;">`;
+                witnessDetailHtml += `<div style="color:var(--accent-gold); font-weight:700; margin-bottom:4px;">👥 참관 증인 (${att.total_witness_count}명) 판정 결과:</div>`;
+                witnessDetailHtml += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+                att.witnesses_detail.forEach(w => {
+                    let rxLabel = '⏳ 대기중';
+                    let rxStyle = 'background:rgba(251,191,36,0.1); color:#fbbf24; border:1px solid rgba(251,191,36,0.3);';
+                    if (w.status === 'REJECTED') {
+                        rxLabel = '❌ 반려';
+                        rxStyle = 'background:rgba(148,163,184,0.1); color:#94a3b8; border:1px solid rgba(148,163,184,0.3);';
+                    } else if (w.reaction === 'SUCCESS') {
+                        rxLabel = '😄 찐웃음 (+20점)';
+                        rxStyle = 'background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.3);';
+                    } else if (w.reaction === 'FAILURE') {
+                        rxLabel = '😐 무반응 (+5점)';
+                        rxStyle = 'background:rgba(59,130,246,0.1); color:#3b82f6; border:1px solid rgba(59,130,246,0.3);';
+                    } else if (w.reaction === 'CRITICAL') {
+                        rxLabel = '😡 불쾌감 (-25점)';
+                        rxStyle = 'background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.3);';
+                    } else if (w.reaction === 'REDCARD') {
+                        rxLabel = '🟥 레드카드 (0점)';
+                        rxStyle = 'background:rgba(220,38,38,0.15); color:#dc2626; border:1px solid rgba(220,38,38,0.4);';
+                    }
+                    
+                    witnessDetailHtml += `<span style="${rxStyle} padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:600;">${escapeHtml(w.witness_name)}: ${rxLabel}</span>`;
+                });
+                witnessDetailHtml += `</div></div>`;
             }
             
             html += `
@@ -842,9 +891,10 @@ function renderAttemptHistory() {
                         "${escapeHtml(att.joke_content)}"
                     </div>
                     <div style="font-size:0.75rem; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-                        <span>현장 참관 증인: <strong style="color:var(--accent-gold);">${escapeHtml(att.witness_name)}</strong></span>
+                        <span>현장 증인: <strong style="color:var(--accent-gold);">${escapeHtml(att.witness_name)}</strong></span>
                         <span>📅 시도일: ${att.attempt_date}</span>
                     </div>
+                    ${witnessDetailHtml}
                 </div>
             `;
         });

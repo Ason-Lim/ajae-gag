@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from models import db, User, Pledge, Attempt, MEMBERS
+from models import db, User, Pledge, Attempt, AttemptWitness, MEMBERS
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'ajae_gag_survival_secret_key_2026')
@@ -182,7 +182,7 @@ def check_pledge(user_name):
 
 @app.route('/api/attempts/create', methods=['POST'])
 def create_attempt():
-    """개그 시도 제출 (시도자 - 선택한 날짜 반영)"""
+    """개그 시도 제출 (시도자 - 다수 증인 선택 지원)"""
     user_name = session.get('user_name')
     data = request.get_json() or {}
     
@@ -193,24 +193,34 @@ def create_attempt():
     if not user:
         return jsonify({'success': False, 'message': '로그인이 필요합니다.'}), 401
         
-    witness_name = data.get('witness_name')
+    witness_names = data.get('witness_names')
+    if not witness_names:
+        single_w = data.get('witness_name')
+        if single_w:
+            witness_names = [single_w]
+        else:
+            witness_names = []
+            
     target_name = data.get('target_name', '').strip()
     joke_content = data.get('joke_content', '').strip()
     attempt_date = data.get('attempt_date') or datetime.now().strftime('%Y-%m-%d')
     
-    if not witness_name or not target_name or not joke_content:
-        return jsonify({'success': False, 'message': '개그 내용, 타겟 이름, 현장 증인을 모두 입력해주세요.'}), 400
+    if not witness_names or not target_name or not joke_content:
+        return jsonify({'success': False, 'message': '개그 내용, 타겟 이름, 참관 증인을 최소 1명 이상 선택해주세요.'}), 400
         
-    if witness_name == user.name:
+    if user.name in witness_names:
         return jsonify({'success': False, 'message': '본인을 증인으로 지정할 수 없습니다.'}), 400
         
-    witness = User.query.filter_by(name=witness_name).first()
-    if not witness:
-        return jsonify({'success': False, 'message': '올바른 증인을 선택해주세요.'}), 400
+    witness_users = []
+    for w_name in witness_names:
+        w_user = User.query.filter_by(name=w_name).first()
+        if not w_user:
+            return jsonify({'success': False, 'message': f'올바른 증인({w_name})을 선택해주세요.'}), 400
+        witness_users.append(w_user)
         
     attempt = Attempt(
         user_id=user.id,
-        witness_id=witness.id,
+        witness_id=witness_users[0].id if witness_users else None,
         target_name=target_name,
         joke_content=joke_content,
         attempt_date=attempt_date,
@@ -219,11 +229,20 @@ def create_attempt():
     db.session.add(attempt)
     db.session.commit()
     
+    for w_user in witness_users:
+        att_w = AttemptWitness(
+            attempt_id=attempt.id,
+            witness_id=w_user.id,
+            status='PENDING'
+        )
+        db.session.add(att_w)
+    db.session.commit()
+    
     return jsonify({'success': True, 'attempt': attempt.to_dict()})
 
 @app.route('/api/attempts/pending', methods=['GET'])
 def get_pending_attempts():
-    """내가 증인으로 지정된 대기 중인 시도 목록"""
+    """내가 증인으로 지정된 미판정 대기 항목 목록"""
     user_name = request.args.get('user_name') or session.get('user_name')
     if not user_name:
         return jsonify({'success': False, 'message': '로그인이 필요합니다.'}), 401
@@ -232,19 +251,26 @@ def get_pending_attempts():
     if not user:
         return jsonify({'success': False, 'message': '회원 정보를 찾을 수 없습니다.'}), 404
         
-    pending = Attempt.query.filter_by(witness_id=user.id, status='PENDING').order_by(Attempt.created_at.desc()).all()
-    return jsonify({'success': True, 'pending_attempts': [p.to_dict() for p in pending]})
+    pending_witnesses = AttemptWitness.query.filter_by(witness_id=user.id, status='PENDING').all()
+    attempt_ids = [pw.attempt_id for pw in pending_witnesses]
+    
+    legacy_attempts = Attempt.query.filter_by(witness_id=user.id, status='PENDING').all()
+    for la in legacy_attempts:
+        if la.id not in attempt_ids:
+            attempt_ids.append(la.id)
+            
+    pending_attempts = Attempt.query.filter(Attempt.id.in_(attempt_ids)).order_by(Attempt.created_at.desc()).all() if attempt_ids else []
+    return jsonify({'success': True, 'pending_attempts': [p.to_dict() for p in pending_attempts]})
 
 @app.route('/api/attempts/review', methods=['POST'])
 def review_attempt():
-    """증인의 승인/반려 및 리액션 확정"""
+    """증인의 개별 승인/반려 및 다수 증인 평균 점수 자동 산정"""
     data = request.get_json() or {}
     user_name = data.get('reviewer_name') or session.get('user_name')
     if not user_name:
         return jsonify({'success': False, 'message': '로그인이 필요합니다.'}), 401
         
     user = User.query.filter_by(name=user_name).first()
-    
     attempt_id = data.get('attempt_id')
     action = data.get('action')
     reaction = data.get('reaction')
@@ -253,46 +279,89 @@ def review_attempt():
     if not attempt:
         return jsonify({'success': False, 'message': '해당 시도 건을 찾을 수 없습니다.'}), 404
         
-    if attempt.witness_id != user.id:
+    att_witness = AttemptWitness.query.filter_by(attempt_id=attempt.id, witness_id=user.id).first()
+    if not att_witness and attempt.witness_id == user.id:
+        att_witness = AttemptWitness(attempt_id=attempt.id, witness_id=user.id, status='PENDING')
+        db.session.add(att_witness)
+        db.session.commit()
+        
+    if not att_witness:
         return jsonify({'success': False, 'message': '지정된 증인만 승인/반려할 수 있습니다.'}), 403
         
-    if attempt.status != 'PENDING':
-        return jsonify({'success': False, 'message': '이미 처리가 완료된 항목입니다.'}), 400
+    if att_witness.status != 'PENDING':
+        return jsonify({'success': False, 'message': '이미 본인이 판정을 완료한 항목입니다.'}), 400
         
     if action == 'REJECT':
-        attempt.status = 'REJECTED'
-        attempt.reaction = None
-        attempt.points_awarded = 0
-        attempt.pepper_delta = 0
-        attempt.fine_amount = 0
+        att_witness.status = 'REJECTED'
+        att_witness.reaction = None
+        att_witness.points = 0
+        att_witness.pepper = 0
+        att_witness.fine = 0
     elif action == 'APPROVE':
-        attempt.status = 'APPROVED'
-        attempt.reaction = reaction
+        att_witness.status = 'APPROVED'
+        att_witness.reaction = reaction
         
         if reaction == 'SUCCESS':
-            attempt.points_awarded = 20
-            attempt.pepper_delta = 1
-            attempt.fine_amount = 0
+            att_witness.points = 20
+            att_witness.pepper = 1
+            att_witness.fine = 0
         elif reaction == 'FAILURE':
-            attempt.points_awarded = 5
-            attempt.pepper_delta = 1
-            attempt.fine_amount = 0
+            att_witness.points = 5
+            att_witness.pepper = 1
+            att_witness.fine = 0
         elif reaction == 'CRITICAL':
-            attempt.points_awarded = -25
-            attempt.pepper_delta = 0
-            attempt.fine_amount = 2000
+            att_witness.points = -25
+            att_witness.pepper = 0
+            att_witness.fine = 2000
         elif reaction == 'REDCARD':
-            attempt.points_awarded = 0
-            attempt.pepper_delta = 0
-            attempt.fine_amount = 10000
+            att_witness.points = 0
+            att_witness.pepper = 0
+            att_witness.fine = 10000
         else:
             return jsonify({'success': False, 'message': '올바른 반응 유형을 선택해주세요.'}), 400
     else:
         return jsonify({'success': False, 'message': '올바른 처리 동작을 선택해주세요.'}), 400
         
-    attempt.reviewed_at = datetime.utcnow()
+    att_witness.reviewed_at = datetime.utcnow()
     db.session.commit()
     
+    all_witnesses = AttemptWitness.query.filter_by(attempt_id=attempt.id).all()
+    if not all_witnesses:
+        all_witnesses = [att_witness]
+        
+    rejected_count = sum(1 for w in all_witnesses if w.status == 'REJECTED')
+    approved_count = sum(1 for w in all_witnesses if w.status == 'APPROVED')
+    total_count = len(all_witnesses)
+    
+    if rejected_count > 0:
+        attempt.status = 'REJECTED'
+        attempt.reaction = None
+        attempt.points_awarded = 0
+        attempt.pepper_delta = 0
+        attempt.fine_amount = 0
+        attempt.reviewed_at = datetime.utcnow()
+    elif approved_count == total_count:
+        attempt.status = 'APPROVED'
+        avg_points = round(sum(w.points for w in all_witnesses) / total_count)
+        avg_pepper = round(sum(w.pepper for w in all_witnesses) / total_count)
+        avg_fine = round(sum(w.fine for w in all_witnesses) / total_count)
+        
+        attempt.points_awarded = avg_points
+        attempt.pepper_delta = avg_pepper
+        attempt.fine_amount = avg_fine
+        attempt.reviewed_at = datetime.utcnow()
+        
+        reactions = [w.reaction for w in all_witnesses if w.reaction]
+        if 'REDCARD' in reactions:
+            attempt.reaction = 'REDCARD'
+        elif 'CRITICAL' in reactions:
+            attempt.reaction = 'CRITICAL'
+        elif 'SUCCESS' in reactions:
+            attempt.reaction = 'SUCCESS'
+        else:
+            attempt.reaction = 'FAILURE'
+            
+    db.session.commit()
     return jsonify({'success': True, 'attempt': attempt.to_dict()})
 
 @app.route('/api/dashboard/summary', methods=['GET'])
@@ -382,6 +451,7 @@ def get_attempts_history():
 def reset_scores():
     """모든 개그 시도 내역 삭제 (초기 0점 상태 리셋)"""
     with app.app_context():
+        AttemptWitness.query.delete()
         Attempt.query.delete()
         db.session.commit()
     return jsonify({'success': True, 'message': '모든 시도 내역이 리셋되어 6명 회원의 초기 점수, 고추, 벌금이 0으로 변경되었습니다.'})
@@ -390,6 +460,7 @@ def reset_scores():
 def reset_all_data():
     """모든 개그 시도 및 서약서 데이터 삭제 (완전 깨끗한 초기화)"""
     with app.app_context():
+        AttemptWitness.query.delete()
         Attempt.query.delete()
         Pledge.query.delete()
         db.session.commit()

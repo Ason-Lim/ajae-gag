@@ -547,3 +547,28 @@ textarea.form-control {
   box-shadow: 0 0 8px var(--primary-red-glow);
 }
 
+/* Witness Selector Pills */
+.witness-pill {
+  padding: 8px 14px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.witness-pill.selected {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: var(--primary-red);
+  color: #ffffff;
+  box-shadow: 0 0 10px var(--primary-red-glow);
+}
+
+

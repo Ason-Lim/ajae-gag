@@ -95,8 +95,11 @@
                             <input type="date" class="form-control" id="attemptDate" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">개그 내용</label>
-                            <textarea class="form-label form-control" id="jokeContent" placeholder="여성을 대상으로 던진 아재개그를 작성하세요. (예: 세상에서 가장 가난한 왕은? 최저임금)" required></textarea>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <label class="form-label" style="margin-bottom:0;">개그 내용</label>
+                                <span style="font-size:0.72rem; color:var(--accent-gold);">💡 줄바꿈: Mac (⌥ Option+Enter) / Win (Ctrl+Enter)</span>
+                            </div>
+                            <textarea class="form-control" id="jokeContent" placeholder="여성을 대상으로 던진 아재개그를 작성하세요. (줄바꿈 가능&#10;예: 세상에서 가장 가난한 왕은?&#10;최저임금!)" required></textarea>
                         </div>
                         <div class="form-group">
                             <label class="form-label">타겟 이름 (여성)</label>

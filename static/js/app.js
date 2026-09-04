@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkLoginSession();
     setupPledgeDate();
     initAttemptDatePicker();
+    initJokeTextareaKeydown();
     
     // 5초마다 대기열 카운트 동기화
     setInterval(updatePendingBadge, 5000);
@@ -51,6 +52,37 @@ function initAttemptDatePicker() {
         const today = new Date().toISOString().split('T')[0];
         dateInput.value = today;
     }
+}
+
+function initJokeTextareaKeydown() {
+    const textarea = document.getElementById('jokeContent');
+    if (!textarea) return;
+    
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            // Mac: Option(Alt)+Enter | Win: Ctrl+Enter or Shift+Enter or plain Enter
+            if (e.altKey || e.ctrlKey) {
+                e.preventDefault();
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const val = textarea.value;
+                textarea.value = val.substring(0, start) + '\n' + val.substring(end);
+                textarea.selectionStart = textarea.selectionEnd = start + 1;
+            } else {
+                e.stopPropagation();
+            }
+        }
+    });
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 /* --------------------------------------------------------------------------
@@ -526,10 +558,10 @@ function renderRecentFeed(attempts) {
         html += `
             <div style="padding:10px 0; border-bottom:1px solid var(--border-color); font-size:0.85rem;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                    <strong>${att.author_name} ➔ ${att.target_name}</strong>
-                    <span style="font-size:0.75rem; color:var(--accent-gold); font-weight:600;">📅 ${displayDate} (증인: ${att.witness_name})</span>
+                    <strong>${escapeHtml(att.author_name)} ➔ ${escapeHtml(att.target_name)}</strong>
+                    <span style="font-size:0.75rem; color:var(--accent-gold); font-weight:600;">📅 ${displayDate} (증인: ${escapeHtml(att.witness_name)})</span>
                 </div>
-                <div style="color:#cbd5e1; margin-bottom:4px;">"${att.joke_content}"</div>
+                <div style="color:#cbd5e1; margin-bottom:4px; white-space:pre-wrap; word-break:break-word;">"${escapeHtml(att.joke_content)}"</div>
                 <div>${statusBadge}</div>
             </div>
         `;
@@ -633,15 +665,15 @@ function renderPendingQueue(pendingList) {
         html += `
             <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:12px; margin-bottom:12px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.85rem;">
-                    <strong style="color:var(--accent-gold);">시도자: ${item.author_name} (타겟: ${item.target_name})</strong>
+                    <strong style="color:var(--accent-gold);">시도자: ${escapeHtml(item.author_name)} (타겟: ${escapeHtml(item.target_name)})</strong>
                     <span style="font-size:0.75rem; color:#f87171; font-weight:700;">📅 시도일: ${displayDate}</span>
                 </div>
-                <div style="font-size:0.95rem; color:#f8fafc; margin-bottom:10px; padding:8px; background:rgba(0,0,0,0.3); border-radius:6px;">
-                    "${item.joke_content}"
+                <div style="font-size:0.95rem; color:#f8fafc; margin-bottom:10px; padding:8px; background:rgba(0,0,0,0.3); border-radius:6px; white-space:pre-wrap; word-break:break-word;">
+                    "${escapeHtml(item.joke_content)}"
                 </div>
                 <div style="display:flex; gap:10px;">
                     <button class="btn btn-outline" style="flex:1; padding:8px; font-size:0.8rem;" onclick="rejectAttemptDirect(${item.id})">❌ 반려</button>
-                    <button class="btn btn-primary" style="flex:2; padding:8px; font-size:0.8rem;" onclick="openReviewModal(${item.id}, '${item.author_name}', '${item.target_name}', '${escapeQuotes(item.joke_content)}', '${displayDate}')">✅ 반응 선택 & 승인</button>
+                    <button class="btn btn-primary" style="flex:2; padding:8px; font-size:0.8rem;" onclick="openReviewModal(${item.id}, '${escapeQuotes(item.author_name)}', '${escapeQuotes(item.target_name)}', '${escapeQuotes(item.joke_content)}', '${displayDate}')">✅ 반응 선택 & 승인</button>
                 </div>
             </div>
         `;
@@ -660,7 +692,8 @@ function openReviewModal(attemptId, authorName, targetName, jokeContent, attempt
     document.querySelectorAll('.reaction-btn').forEach(btn => btn.classList.remove('selected'));
     
     document.getElementById('reviewJokePreview').innerHTML = `
-        <strong>[${authorName} ➔ ${targetName}] (📅 시도일: ${attemptDate})</strong><br>"${jokeContent}"
+        <strong>[${escapeHtml(authorName)} ➔ ${escapeHtml(targetName)}] (📅 시도일: ${attemptDate})</strong>
+        <div style="margin-top:6px; padding:8px; background:rgba(0,0,0,0.3); border-radius:6px; color:#f8fafc; white-space:pre-wrap; word-break:break-word;">"${escapeHtml(jokeContent)}"</div>
     `;
     
     document.getElementById('reviewModal').classList.add('active');
@@ -784,30 +817,33 @@ function renderAttemptHistory() {
         filteredAttempts.forEach(att => {
             let statusBadgeHtml = '';
             if (att.status === 'PENDING') {
-                statusBadgeHtml = `<span style="color:#fbbf24; font-size:0.75rem; font-weight:700;">⏳ 증인 승인 대기중</span>`;
+                statusBadgeHtml = `<span style="background:rgba(251, 191, 36, 0.15); color:#fbbf24; border:1px solid rgba(251, 191, 36, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">⏳ 승인 대기중</span>`;
             } else if (att.status === 'REJECTED') {
-                statusBadgeHtml = `<span style="color:#94a3b8; font-size:0.75rem; font-weight:700;">❌ 증인 반려됨</span>`;
+                statusBadgeHtml = `<span style="background:rgba(148, 163, 184, 0.15); color:#94a3b8; border:1px solid rgba(148, 163, 184, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">❌ 증인 반려됨</span>`;
             } else if (att.status === 'APPROVED') {
-                let rxText = '';
-                if (att.reaction === 'SUCCESS') rxText = '😄 찐웃음 (+20점, 🌶️)';
-                else if (att.reaction === 'FAILURE') rxText = '😐 무반응 (+5점, 🌶️)';
-                else if (att.reaction === 'CRITICAL') rxText = '😡 불쾌감 (-25점, 벌금 2천원)';
-                else if (att.reaction === 'REDCARD') rxText = '🟥 레드카드 (무효, 벌금 1만원)';
-                statusBadgeHtml = `<span style="color:#10b981; font-size:0.75rem; font-weight:700;">✅ ${rxText}</span>`;
+                if (att.reaction === 'SUCCESS') {
+                    statusBadgeHtml = `<span style="background:rgba(16, 185, 129, 0.15); color:#10b981; border:1px solid rgba(16, 185, 129, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">😄 찐웃음 (승인) (+20점, 🌶️)</span>`;
+                } else if (att.reaction === 'FAILURE') {
+                    statusBadgeHtml = `<span style="background:rgba(59, 130, 246, 0.15); color:#3b82f6; border:1px solid rgba(59, 130, 246, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">😐 무반응 (승인) (+5점, 🌶️)</span>`;
+                } else if (att.reaction === 'CRITICAL') {
+                    statusBadgeHtml = `<span style="background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">😡 불쾌감 (-25점, 벌금 2천원)</span>`;
+                } else if (att.reaction === 'REDCARD') {
+                    statusBadgeHtml = `<span style="background:rgba(220, 38, 38, 0.2); color:#dc2626; border:1px solid rgba(220, 38, 38, 0.5); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:800;">🟥 레드카드 (무효, 벌금 1만원)</span>`;
+                }
             }
             
             html += `
-                <div style="padding:8px 10px; background:rgba(0,0,0,0.25); border-radius:6px; margin-bottom:8px; font-size:0.83rem;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                        <strong style="color:white;">${att.author_name} ➔ ${att.target_name}</strong>
+                <div style="padding:10px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.06); border-radius:8px; margin-bottom:10px; font-size:0.85rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <strong style="color:white; font-size:0.9rem;">${escapeHtml(att.author_name)} ➔ ${escapeHtml(att.target_name)}</strong>
                         ${statusBadgeHtml}
                     </div>
-                    <div style="color:#cbd5e1; margin:4px 0; font-size:0.88rem; line-height:1.4;">
-                        "${att.joke_content}"
+                    <div style="color:#e2e8f0; margin:6px 0; font-size:0.9rem; line-height:1.5; white-space:pre-wrap; word-break:break-word; background:rgba(255,255,255,0.03); padding:8px; border-radius:6px; border-left:3px solid var(--accent-gold);">
+                        "${escapeHtml(att.joke_content)}"
                     </div>
-                    <div style="font-size:0.75rem; color:var(--text-muted); display:flex; justify-content:space-between; margin-top:4px;">
-                        <span>참관 증인: <strong style="color:var(--accent-gold);">${att.witness_name}</strong></span>
-                        <span>제출일: ${att.attempt_date}</span>
+                    <div style="font-size:0.75rem; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+                        <span>현장 참관 증인: <strong style="color:var(--accent-gold);">${escapeHtml(att.witness_name)}</strong></span>
+                        <span>📅 시도일: ${att.attempt_date}</span>
                     </div>
                 </div>
             `;

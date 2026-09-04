@@ -121,6 +121,9 @@ function clearSignatureCanvas() {
 /* --------------------------------------------------------------------------
    3. Auth & Login / Pledge Workflow
    -------------------------------------------------------------------------- */
+let isPledgedUser = false;
+let forceRedrawSignature = false;
+
 function checkLoginSession() {
     const savedUser = localStorage.getItem('ajae_user_name');
     if (savedUser && MEMBERS.includes(savedUser)) {
@@ -132,10 +135,73 @@ function checkLoginSession() {
 
 function openLoginModal() {
     document.getElementById('loginModal').classList.add('active');
+    const select = document.getElementById('loginUserSelect');
+    if (select && select.value) {
+        onLoginUserSelectChange(select.value);
+    }
 }
 
 function closeLoginModal() {
     document.getElementById('loginModal').classList.remove('active');
+}
+
+function onLoginUserSelectChange(userName) {
+    const pledgeBox = document.getElementById('existingPledgeBox');
+    const sigContainer = document.getElementById('signatureContainer');
+    const confirmBtn = document.getElementById('confirmLoginBtn');
+    
+    if (!userName) {
+        if (pledgeBox) pledgeBox.style.display = 'none';
+        if (sigContainer) sigContainer.style.display = 'block';
+        if (confirmBtn) confirmBtn.innerHTML = '✍️ [동의합니다] 및 대시보드 진입';
+        isPledgedUser = false;
+        forceRedrawSignature = false;
+        return;
+    }
+
+    fetch(`/api/pledge/check/${encodeURIComponent(userName)}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.has_pledged && data.pledge) {
+                isPledgedUser = true;
+                forceRedrawSignature = false;
+                if (pledgeBox) pledgeBox.style.display = 'block';
+                const pledgeDateEl = document.getElementById('existingPledgeDate');
+                if (pledgeDateEl) pledgeDateEl.innerText = data.pledge.agreed_date_str || '';
+                const sigImgEl = document.getElementById('existingSignatureImg');
+                if (sigImgEl) sigImgEl.src = data.pledge.signature_data;
+                if (sigContainer) sigContainer.style.display = 'none';
+                if (confirmBtn) confirmBtn.innerHTML = '🚀 기존 서명으로 대시보드 진입';
+            } else {
+                isPledgedUser = false;
+                forceRedrawSignature = false;
+                if (pledgeBox) pledgeBox.style.display = 'none';
+                if (sigContainer) sigContainer.style.display = 'block';
+                if (confirmBtn) confirmBtn.innerHTML = '✍️ [동의합니다] 및 대시보드 진입';
+            }
+        })
+        .catch(() => {
+            isPledgedUser = false;
+            forceRedrawSignature = false;
+            if (pledgeBox) pledgeBox.style.display = 'none';
+            if (sigContainer) sigContainer.style.display = 'block';
+            if (confirmBtn) confirmBtn.innerHTML = '✍️ [동의합니다] 및 대시보드 진입';
+        });
+}
+
+function toggleRedrawSignature() {
+    forceRedrawSignature = !forceRedrawSignature;
+    const container = document.getElementById('signatureContainer');
+    const confirmBtn = document.getElementById('confirmLoginBtn');
+    
+    if (forceRedrawSignature) {
+        if (container) container.style.display = 'block';
+        if (confirmBtn) confirmBtn.innerHTML = '✍️ [새 서명으로 동의] 및 대시보드 진입';
+        clearSignatureCanvas();
+    } else {
+        if (container) container.style.display = 'none';
+        if (confirmBtn) confirmBtn.innerHTML = '🚀 기존 서명으로 대시보드 진입';
+    }
 }
 
 function confirmLoginAndPledge() {
@@ -147,6 +213,26 @@ function confirmLoginAndPledge() {
         return;
     }
     
+    // 이미 서약된 회원이며 새 서명을 작성하지 않는 경우: 바로 로그인
+    if (isPledgedUser && !forceRedrawSignature) {
+        fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: userName })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                loginUser(userName);
+                closeLoginModal();
+            } else {
+                alert(data.message || '로그인 실패');
+            }
+        })
+        .catch(err => alert(err.message || '로그인 오류'));
+        return;
+    }
+
     if (!hasSigned) {
         alert('서약서 동의를 위해 아래 영역에 디지털 서명을 해주세요.');
         return;
@@ -234,7 +320,10 @@ function switchTab(tabName) {
     
     if (tabName === 'dashboard') loadDashboard();
     if (tabName === 'attempt') initAttemptDatePicker();
-    if (tabName === 'witness') loadPendingWitnessQueue();
+    if (tabName === 'witness') {
+        loadPendingWitnessQueue();
+        loadAttemptHistory();
+    }
     if (tabName === 'pledges') loadPledgesAndFines();
 }
 
@@ -481,7 +570,7 @@ function submitAttempt(event) {
             alert(`🌶️ 개그 시도 (${attemptDate})가 제출되었습니다!\n증인 [${witnessName}] 님의 승인을 기다립니다.`);
             document.getElementById('attemptForm').reset();
             initAttemptDatePicker();
-            switchTab('dashboard');
+            switchTab('witness');
         } else {
             alert(data.message || '제출에 실패했습니다.');
         }
@@ -489,8 +578,11 @@ function submitAttempt(event) {
 }
 
 /* --------------------------------------------------------------------------
-   7. Witness Queue & Approval Logic
+   7. Witness Queue & Approval Logic & History
    -------------------------------------------------------------------------- */
+let currentHistoryFilter = 'ALL';
+let historyDataCache = [];
+
 function updatePendingBadge() {
     if (!currentUser) return;
     fetch(`/api/attempts/pending?user_name=${encodeURIComponent(currentUser)}`)
@@ -607,6 +699,7 @@ function submitReviewAction(action) {
         if (data.success) {
             closeReviewModal();
             loadPendingWitnessQueue();
+            loadAttemptHistory();
             updatePendingBadge();
             alert('증인 판정이 완료되어 실시간 DB 및 랭킹에 반영되었습니다!');
         } else {
@@ -631,9 +724,103 @@ function rejectAttemptDirect(attemptId) {
     .then(data => {
         if (data.success) {
             loadPendingWitnessQueue();
+            loadAttemptHistory();
             updatePendingBadge();
         }
     });
+}
+
+/* --------------------------------------------------------------------------
+   Daily Submission & Witness Approval History Logic
+   -------------------------------------------------------------------------- */
+function loadAttemptHistory() {
+    fetch('/api/attempts/history')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                historyDataCache = data.history || [];
+                renderAttemptHistory();
+            }
+        });
+}
+
+function filterHistory(filterType, btnEl) {
+    currentHistoryFilter = filterType;
+    if (btnEl) {
+        document.querySelectorAll('.history-filter-btn').forEach(btn => btn.classList.remove('active'));
+        btnEl.classList.add('active');
+    }
+    renderAttemptHistory();
+}
+
+function renderAttemptHistory() {
+    const container = document.getElementById('historyListContainer');
+    if (!container) return;
+    
+    if (!historyDataCache || historyDataCache.length === 0) {
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">제출된 개그 시도 히스토리가 없습니다.</div>';
+        return;
+    }
+    
+    let html = '';
+    let hasMatchingGroup = false;
+    
+    historyDataCache.forEach(group => {
+        const filteredAttempts = group.attempts.filter(att => {
+            if (currentHistoryFilter === 'ALL') return true;
+            return att.status === currentHistoryFilter;
+        });
+        
+        if (filteredAttempts.length === 0) return;
+        hasMatchingGroup = true;
+        
+        html += `
+            <div style="margin-bottom:14px; background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:6px; margin-bottom:8px;">
+                    <strong style="color:var(--accent-gold); font-size:0.88rem;">📅 ${group.date} 제출 내역 (${filteredAttempts.length}건)</strong>
+                </div>
+        `;
+        
+        filteredAttempts.forEach(att => {
+            let statusBadgeHtml = '';
+            if (att.status === 'PENDING') {
+                statusBadgeHtml = `<span style="color:#fbbf24; font-size:0.75rem; font-weight:700;">⏳ 증인 승인 대기중</span>`;
+            } else if (att.status === 'REJECTED') {
+                statusBadgeHtml = `<span style="color:#94a3b8; font-size:0.75rem; font-weight:700;">❌ 증인 반려됨</span>`;
+            } else if (att.status === 'APPROVED') {
+                let rxText = '';
+                if (att.reaction === 'SUCCESS') rxText = '😄 찐웃음 (+20점, 🌶️)';
+                else if (att.reaction === 'FAILURE') rxText = '😐 무반응 (+5점, 🌶️)';
+                else if (att.reaction === 'CRITICAL') rxText = '😡 불쾌감 (-25점, 벌금 2천원)';
+                else if (att.reaction === 'REDCARD') rxText = '🟥 레드카드 (무효, 벌금 1만원)';
+                statusBadgeHtml = `<span style="color:#10b981; font-size:0.75rem; font-weight:700;">✅ ${rxText}</span>`;
+            }
+            
+            html += `
+                <div style="padding:8px 10px; background:rgba(0,0,0,0.25); border-radius:6px; margin-bottom:8px; font-size:0.83rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <strong style="color:white;">${att.author_name} ➔ ${att.target_name}</strong>
+                        ${statusBadgeHtml}
+                    </div>
+                    <div style="color:#cbd5e1; margin:4px 0; font-size:0.88rem; line-height:1.4;">
+                        "${att.joke_content}"
+                    </div>
+                    <div style="font-size:0.75rem; color:var(--text-muted); display:flex; justify-content:space-between; margin-top:4px;">
+                        <span>참관 증인: <strong style="color:var(--accent-gold);">${att.witness_name}</strong></span>
+                        <span>제출일: ${att.attempt_date}</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `</div>`;
+    });
+    
+    if (!hasMatchingGroup) {
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">해당 조건의 제출 항목이 없습니다.</div>';
+    } else {
+        container.innerHTML = html;
+    }
 }
 
 /* --------------------------------------------------------------------------

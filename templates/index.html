@@ -122,16 +122,36 @@
                 </div>
             </section>
 
-            <!-- TAB 3: Witness Approval Queue -->
+            <!-- TAB 3: Witness Approval Queue & Daily History -->
             <section id="tab-witness" class="tab-pane">
+                <!-- Pending Queue for current witness -->
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">👁️ 증인 승인</div>
+                        <div class="card-title">👁️ 내게 요청된 증인 승인 대기열</div>
                         <button class="btn btn-outline btn-refresh" onclick="loadPendingWitnessQueue()">🔄 새로고침</button>
                     </div>
                     <div id="pendingQueueContainer">
                         <div style="text-align: center; padding: 20px; color: var(--text-muted);">
                             승인 대기 중인 항목이 없습니다.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Daily Submission & Witness Approval History -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">📅 일자별 제출 & 증인 승인 히스토리</div>
+                        <button class="btn btn-outline btn-refresh" onclick="loadAttemptHistory()">🔄 히스토리 갱신</button>
+                    </div>
+                    <div class="history-filter-bar" style="display:flex; gap:6px; margin-bottom:12px; overflow-x:auto; padding-bottom:4px;">
+                        <button class="history-filter-btn active" onclick="filterHistory('ALL', this)">전체</button>
+                        <button class="history-filter-btn" onclick="filterHistory('PENDING', this)">⏳ 대기중</button>
+                        <button class="history-filter-btn" onclick="filterHistory('APPROVED', this)">✅ 승인됨</button>
+                        <button class="history-filter-btn" onclick="filterHistory('REJECTED', this)">❌ 반려됨</button>
+                    </div>
+                    <div id="historyListContainer">
+                        <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                            제출 히스토리를 불러오는 중...
                         </div>
                     </div>
                 </div>
@@ -227,7 +247,7 @@
 
             <div class="form-group" style="margin-bottom: 16px;">
                 <label class="form-label">참여자 이름 선택 (6인 회원 전용)</label>
-                <select class="form-select" id="loginUserSelect">
+                <select class="form-select" id="loginUserSelect" onchange="onLoginUserSelectChange(this.value)">
                     <option value="">이름을 선택하세요...</option>
                     <option value="강득헌">강득헌</option>
                     <option value="오용택">오용택</option>
@@ -236,6 +256,23 @@
                     <option value="채연석">채연석</option>
                     <option value="임형채">임형채</option>
                 </select>
+            </div>
+
+            <!-- Existing Signed Pledge Status Box (Shows if user already signed) -->
+            <div id="existingPledgeBox" style="display:none; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:700; color:#10b981; font-size:0.9rem;">✅ 서약 및 서명 등록 완료</span>
+                    <span id="existingPledgeDate" style="font-size:0.75rem; color:var(--accent-gold);"></span>
+                </div>
+                <div style="font-size:0.78rem; color:#cbd5e1; margin-top:4px;">
+                    등록된 기존 서명이 유지되어 바로 로그인할 수 있습니다.
+                </div>
+                <div style="margin-top:8px; text-align:center;">
+                    <img id="existingSignatureImg" src="" style="max-height:55px; background:white; padding:3px; border-radius:4px; border:1px solid #cbd5e1;" alt="기존 서명" />
+                </div>
+                <div style="text-align:right; margin-top:8px;">
+                    <button type="button" class="btn btn-outline" style="display:inline-block; width:auto; padding:3px 10px; font-size:0.75rem;" onclick="toggleRedrawSignature()">✏️ 서명 재작성하기</button>
+                </div>
             </div>
 
             <!-- Pledge Text Box -->
@@ -269,8 +306,8 @@
                 </div>
             </div>
 
-            <!-- Digital Signature Canvas -->
-            <div class="signature-container">
+            <!-- Digital Signature Canvas Area -->
+            <div class="signature-container" id="signatureContainer">
                 <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: var(--text-muted);">
                     ✍️ 아래 영역에 손가락 또는 마우스로 직접 서명하세요:
                 </div>
@@ -280,7 +317,7 @@
                 </div>
             </div>
 
-            <button type="button" class="btn btn-primary" onclick="confirmLoginAndPledge()">
+            <button type="button" class="btn btn-primary" id="confirmLoginBtn" onclick="confirmLoginAndPledge()">
                 ✍️ [동의합니다] 및 대시보드 진입
             </button>
         </div>

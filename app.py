@@ -37,6 +37,12 @@ def init_db():
     """데이터베이스 및 기본 6인 사용자 초기화"""
     with app.app_context():
         db.create_all()
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(db.text("ALTER TABLE attempts ADD COLUMN attempt_date VARCHAR(20)"))
+                conn.commit()
+        except Exception:
+            pass
         for name in MEMBERS:
             user = User.query.filter_by(name=name).first()
             if not user:
@@ -153,6 +159,27 @@ def list_pledges():
     pledges = Pledge.query.all()
     return jsonify({'success': True, 'pledges': [p.to_dict() for p in pledges]})
 
+@app.route('/api/pledge/check/<user_name>', methods=['GET'])
+def check_pledge(user_name):
+    """특정 회원의 서약 완료 여부 및 서명 정보 조회"""
+    user = User.query.filter_by(name=user_name).first()
+    if not user:
+        return jsonify({'success': False, 'message': '회원을 찾을 수 없습니다.'}), 404
+    
+    pledge = Pledge.query.filter_by(user_id=user.id).first()
+    if pledge:
+        return jsonify({
+            'success': True,
+            'has_pledged': True,
+            'pledge': pledge.to_dict()
+        })
+    return jsonify({
+        'success': True,
+        'has_pledged': False,
+        'pledge': None
+    })
+
+
 @app.route('/api/attempts/create', methods=['POST'])
 def create_attempt():
     """개그 시도 제출 (시도자 - 선택한 날짜 반영)"""
@@ -197,7 +224,7 @@ def create_attempt():
 @app.route('/api/attempts/pending', methods=['GET'])
 def get_pending_attempts():
     """내가 증인으로 지정된 대기 중인 시도 목록"""
-    user_name = session.get('user_name') or request.args.get('user_name')
+    user_name = request.args.get('user_name') or session.get('user_name')
     if not user_name:
         return jsonify({'success': False, 'message': '로그인이 필요합니다.'}), 401
         
@@ -211,12 +238,12 @@ def get_pending_attempts():
 @app.route('/api/attempts/review', methods=['POST'])
 def review_attempt():
     """증인의 승인/반려 및 리액션 확정"""
-    user_name = session.get('user_name') or request.json.get('reviewer_name')
+    data = request.get_json() or {}
+    user_name = data.get('reviewer_name') or session.get('user_name')
     if not user_name:
         return jsonify({'success': False, 'message': '로그인이 필요합니다.'}), 401
         
     user = User.query.filter_by(name=user_name).first()
-    data = request.get_json() or {}
     
     attempt_id = data.get('attempt_id')
     action = data.get('action')
@@ -330,6 +357,27 @@ def dashboard_summary():
         'daily_stats': daily_stats
     })
 
+@app.route('/api/attempts/history', methods=['GET'])
+def get_attempts_history():
+    """모든 제출 항목 (대기중, 승인됨, 반려됨)의 일자별 목록 및 상세 히스토리 반환"""
+    attempts = Attempt.query.order_by(Attempt.attempt_date.desc(), Attempt.created_at.desc()).all()
+    
+    daily_groups = {}
+    for att in attempts:
+        d = att.attempt_date or att.created_at.strftime('%Y-%m-%d')
+        if d not in daily_groups:
+            daily_groups[d] = {
+                'date': d,
+                'attempts': []
+            }
+        daily_groups[d]['attempts'].append(att.to_dict())
+        
+    return jsonify({
+        'success': True,
+        'history': list(daily_groups.values()),
+        'all_attempts': [a.to_dict() for a in attempts]
+    })
+
 @app.route('/api/admin/reset_scores', methods=['POST', 'GET'])
 def reset_scores():
     """모든 개그 시도 내역 삭제 (초기 0점 상태 리셋)"""
@@ -338,6 +386,16 @@ def reset_scores():
         db.session.commit()
     return jsonify({'success': True, 'message': '모든 시도 내역이 리셋되어 6명 회원의 초기 점수, 고추, 벌금이 0으로 변경되었습니다.'})
 
+@app.route('/api/admin/reset_all', methods=['POST', 'GET'])
+def reset_all_data():
+    """모든 개그 시도 및 서약서 데이터 삭제 (완전 깨끗한 초기화)"""
+    with app.app_context():
+        Attempt.query.delete()
+        Pledge.query.delete()
+        db.session.commit()
+    return jsonify({'success': True, 'message': '모든 개그 시도 및 서약서 데이터가 깨끗이 초기화되었습니다.'})
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+

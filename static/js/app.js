@@ -767,6 +767,29 @@ function submitReviewAction(action) {
 }
 
 
+function loadAttemptHistory() {
+    fetch('/api/attempts/history')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                historyDataCache = data.history || [];
+                renderAttemptHistory();
+            }
+        })
+        .catch(err => {
+            console.error('Failed to load history:', err);
+        });
+}
+
+function filterHistory(filterType, btnEl) {
+    currentHistoryFilter = filterType;
+    if (btnEl) {
+        document.querySelectorAll('.history-filter-btn').forEach(b => b.classList.remove('active'));
+        btnEl.classList.add('active');
+    }
+    renderAttemptHistory();
+}
+
 function toggleHistoryRowDetail(id) {
     const detailEl = document.getElementById(`history-row-detail-${id}`);
     if (detailEl) {

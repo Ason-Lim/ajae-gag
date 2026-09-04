@@ -766,49 +766,12 @@ function submitReviewAction(action) {
     });
 }
 
-function rejectAttemptDirect(attemptId) {
-    if (!confirm('정말 이 개그 시도를 반려하시겠습니까?')) return;
-    
-    fetch('/api/attempts/review', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            reviewer_name: currentUser,
-            attempt_id: attemptId,
-            action: 'REJECT'
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            loadPendingWitnessQueue();
-            loadAttemptHistory();
-            updatePendingBadge();
-        }
-    });
-}
 
-/* --------------------------------------------------------------------------
-   Daily Submission & Witness Approval History Logic
-   -------------------------------------------------------------------------- */
-function loadAttemptHistory() {
-    fetch('/api/attempts/history')
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                historyDataCache = data.history || [];
-                renderAttemptHistory();
-            }
-        });
-}
-
-function filterHistory(filterType, btnEl) {
-    currentHistoryFilter = filterType;
-    if (btnEl) {
-        document.querySelectorAll('.history-filter-btn').forEach(btn => btn.classList.remove('active'));
-        btnEl.classList.add('active');
+function toggleHistoryRowDetail(id) {
+    const detailEl = document.getElementById(`history-row-detail-${id}`);
+    if (detailEl) {
+        detailEl.style.display = detailEl.style.display === 'none' ? 'block' : 'none';
     }
-    renderAttemptHistory();
 }
 
 function renderAttemptHistory() {
@@ -833,68 +796,65 @@ function renderAttemptHistory() {
         hasMatchingGroup = true;
         
         html += `
-            <div style="margin-bottom:14px; background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:10px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:6px; margin-bottom:8px;">
-                    <strong style="color:var(--accent-gold); font-size:0.88rem;">📅 ${group.date} 제출 내역 (${filteredAttempts.length}건)</strong>
+            <div style="margin-bottom:12px; background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:8px 10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:4px; margin-bottom:6px;">
+                    <strong style="color:var(--accent-gold); font-size:0.83rem;">📅 ${group.date} 제출 목록 (${filteredAttempts.length}건)</strong>
+                    <span style="font-size:0.7rem; color:var(--text-muted);">👇 클릭하여 상세 보기</span>
                 </div>
         `;
         
         filteredAttempts.forEach(att => {
             let statusBadgeHtml = '';
             if (att.status === 'PENDING') {
-                const countInfo = att.total_witness_count > 1 ? ` (${att.completed_witness_count}/${att.total_witness_count}명 완료)` : '';
-                statusBadgeHtml = `<span style="background:rgba(251, 191, 36, 0.15); color:#fbbf24; border:1px solid rgba(251, 191, 36, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">⏳ 승인 대기중${countInfo}</span>`;
+                const countInfo = att.total_witness_count > 1 ? ` (${att.completed_witness_count}/${att.total_witness_count})` : '';
+                statusBadgeHtml = `<span style="background:rgba(251, 191, 36, 0.15); color:#fbbf24; border:1px solid rgba(251, 191, 36, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700; flex-shrink:0;">⏳ 승인 대기${countInfo}</span>`;
             } else if (att.status === 'REJECTED') {
-                statusBadgeHtml = `<span style="background:rgba(148, 163, 184, 0.15); color:#94a3b8; border:1px solid rgba(148, 163, 184, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">❌ 증인 반려됨</span>`;
+                statusBadgeHtml = `<span style="background:rgba(148, 163, 184, 0.15); color:#94a3b8; border:1px solid rgba(148, 163, 184, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700; flex-shrink:0;">❌ 반려</span>`;
             } else if (att.status === 'APPROVED') {
-                const avgTag = att.total_witness_count > 1 ? ' (평균)' : '';
-                statusBadgeHtml = `<span style="background:rgba(16, 185, 129, 0.15); color:#10b981; border:1px solid rgba(16, 185, 129, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700;">✅ 승인 완료${avgTag} (${att.points_awarded >= 0 ? '+' : ''}${att.points_awarded}점, 🌶️ ${att.pepper_delta}개)</span>`;
+                let rxEmoji = '✅';
+                if (att.reaction === 'SUCCESS') rxEmoji = '😄';
+                else if (att.reaction === 'FAILURE') rxEmoji = '😐';
+                else if (att.reaction === 'CRITICAL') rxEmoji = '😡';
+                else if (att.reaction === 'REDCARD') rxEmoji = '🟥';
+                
+                const pts = att.points_awarded >= 0 ? `+${att.points_awarded}` : `${att.points_awarded}`;
+                statusBadgeHtml = `<span style="background:rgba(16, 185, 129, 0.15); color:#10b981; border:1px solid rgba(16, 185, 129, 0.4); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700; flex-shrink:0;">${rxEmoji} ${pts}점</span>`;
             }
             
-            let witnessDetailHtml = '';
+            // Format 1-line joke preview
+            const cleanOneLineJoke = (att.joke_content || '').replace(/\s+/g, ' ').trim();
+            const jokePreview = cleanOneLineJoke.length > 22 ? cleanOneLineJoke.substring(0, 22) + '...' : cleanOneLineJoke;
+
+            // Witness reaction summary (compact string)
+            let witnessSummaryStr = '';
             if (att.witnesses_detail && att.witnesses_detail.length > 0) {
-                witnessDetailHtml += `<div style="font-size:0.78rem; color:#cbd5e1; margin-top:8px; border-top:1px dashed rgba(255,255,255,0.1); padding-top:6px;">`;
-                witnessDetailHtml += `<div style="color:var(--accent-gold); font-weight:700; margin-bottom:4px;">👥 참관 증인 (${att.total_witness_count}명) 판정 결과:</div>`;
-                witnessDetailHtml += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
-                att.witnesses_detail.forEach(w => {
-                    let rxLabel = '⏳ 대기중';
-                    let rxStyle = 'background:rgba(251,191,36,0.1); color:#fbbf24; border:1px solid rgba(251,191,36,0.3);';
-                    if (w.status === 'REJECTED') {
-                        rxLabel = '❌ 반려';
-                        rxStyle = 'background:rgba(148,163,184,0.1); color:#94a3b8; border:1px solid rgba(148,163,184,0.3);';
-                    } else if (w.reaction === 'SUCCESS') {
-                        rxLabel = '😄 찐웃음 (+20점)';
-                        rxStyle = 'background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.3);';
-                    } else if (w.reaction === 'FAILURE') {
-                        rxLabel = '😐 무반응 (+5점)';
-                        rxStyle = 'background:rgba(59,130,246,0.1); color:#3b82f6; border:1px solid rgba(59,130,246,0.3);';
-                    } else if (w.reaction === 'CRITICAL') {
-                        rxLabel = '😡 불쾌감 (-25점)';
-                        rxStyle = 'background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.3);';
-                    } else if (w.reaction === 'REDCARD') {
-                        rxLabel = '🟥 레드카드 (0점)';
-                        rxStyle = 'background:rgba(220,38,38,0.15); color:#dc2626; border:1px solid rgba(220,38,38,0.4);';
-                    }
-                    
-                    witnessDetailHtml += `<span style="${rxStyle} padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:600;">${escapeHtml(w.witness_name)}: ${rxLabel}</span>`;
-                });
-                witnessDetailHtml += `</div></div>`;
+                witnessSummaryStr = att.witnesses_detail.map(w => {
+                    let r = '대기중';
+                    if (w.status === 'REJECTED') r = '반려';
+                    else if (w.reaction === 'SUCCESS') r = '찐웃음(+20)';
+                    else if (w.reaction === 'FAILURE') r = '무반응(+5)';
+                    else if (w.reaction === 'CRITICAL') r = '불쾌감(-25)';
+                    else if (w.reaction === 'REDCARD') r = '레드카드(0)';
+                    return `${w.witness_name}(${r})`;
+                }).join(', ');
+            } else {
+                witnessSummaryStr = att.witness_name || '지정 없음';
             }
-            
+
             html += `
-                <div style="padding:10px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.06); border-radius:8px; margin-bottom:10px; font-size:0.85rem;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <strong style="color:white; font-size:0.9rem;">${escapeHtml(att.author_name)} ➔ ${escapeHtml(att.target_name)}</strong>
+                <div class="history-item-row" onclick="toggleHistoryRowDetail(${att.id})" style="padding:7px 10px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.06); border-radius:6px; margin-bottom:6px; cursor:pointer;" title="클릭하여 상세 보기">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                        <div style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.83rem;">
+                            <strong style="color:white;">${escapeHtml(att.author_name)}➔${escapeHtml(att.target_name)}:</strong>
+                            <span style="color:#cbd5e1; margin-left:4px;">"${escapeHtml(jokePreview)}"</span>
+                        </div>
                         ${statusBadgeHtml}
                     </div>
-                    <div style="color:#e2e8f0; margin:6px 0; font-size:0.9rem; line-height:1.5; white-space:pre-wrap; word-break:break-word; background:rgba(255,255,255,0.03); padding:8px; border-radius:6px; border-left:3px solid var(--accent-gold);">
-                        "${escapeHtml(att.joke_content)}"
+                    
+                    <div id="history-row-detail-${att.id}" style="display:none; font-size:0.75rem; color:#94a3b8; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.1);">
+                        <div style="color:#f8fafc; font-size:0.83rem; white-space:pre-wrap; word-break:break-word; margin-bottom:4px; background:rgba(255,255,255,0.03); padding:6px; border-radius:4px; border-left:2px solid var(--accent-gold);">"${escapeHtml(att.joke_content)}"</div>
+                        <div>👥 <strong>증인 판정:</strong> ${escapeHtml(witnessSummaryStr)}</div>
                     </div>
-                    <div style="font-size:0.75rem; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-                        <span>현장 증인: <strong style="color:var(--accent-gold);">${escapeHtml(att.witness_name)}</strong></span>
-                        <span>📅 시도일: ${att.attempt_date}</span>
-                    </div>
-                    ${witnessDetailHtml}
                 </div>
             `;
         });
@@ -908,6 +868,7 @@ function renderAttemptHistory() {
         container.innerHTML = html;
     }
 }
+
 
 /* --------------------------------------------------------------------------
    8. Fine Ledger & Signed Pledges Viewer

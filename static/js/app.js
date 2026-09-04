@@ -781,6 +781,37 @@ function loadAttemptHistory() {
         });
 }
 
+function keepLatestAttemptOnly() {
+    if (!confirm('가장 최근 시도 1건만 남기고 이전의 모든 시도 내역을 삭제하시겠습니까?')) return;
+    fetch('/api/admin/keep_latest', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                loadAttemptHistory();
+                loadPendingWitnessQueue();
+                updatePendingBadge();
+            } else {
+                alert(data.message || '삭제 실패');
+            }
+        });
+}
+
+function deleteAttemptItem(id) {
+    if (!confirm('이 개그 시도를 삭제하시겠습니까?')) return;
+    fetch(`/api/attempts/delete/${id}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                loadAttemptHistory();
+                loadPendingWitnessQueue();
+                updatePendingBadge();
+            } else {
+                alert(data.message || '삭제 실패');
+            }
+        });
+}
+
 function filterHistory(filterType, btnEl) {
     currentHistoryFilter = filterType;
     if (btnEl) {
@@ -868,7 +899,10 @@ function renderAttemptHistory() {
                             <strong style="color:white; font-size:0.88rem;">${escapeHtml(att.author_name)} ➔ ${escapeHtml(att.target_name)}</strong>
                             <span style="font-size:0.78rem; color:#94a3b8;">현장 증인: <strong style="color:var(--accent-gold);">${escapeHtml(witnessDisplay)}</strong></span>
                         </div>
-                        ${statusBadgeHtml}
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            ${statusBadgeHtml}
+                            <button onclick="deleteAttemptItem(${att.id})" style="background:none; border:none; color:#f87171; font-size:0.8rem; cursor:pointer; padding:2px 4px;" title="이 항목 삭제">🗑️</button>
+                        </div>
                     </div>
                     
                     <div style="color:#e2e8f0; font-size:0.88rem; line-height:1.45; white-space:pre-wrap; word-break:break-word; background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:6px;">${escapeHtml(att.joke_content)}</div>

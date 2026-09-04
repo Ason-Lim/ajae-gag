@@ -466,6 +466,37 @@ def reset_all_data():
         db.session.commit()
     return jsonify({'success': True, 'message': '모든 개그 시도 및 서약서 데이터가 깨끗이 초기화되었습니다.'})
 
+@app.route('/api/admin/keep_latest', methods=['POST', 'GET'])
+def keep_latest_attempts():
+    """가장 최근 1건을 제외한 이전 시도 내역 삭제"""
+    with app.app_context():
+        attempts = Attempt.query.order_by(Attempt.created_at.desc(), Attempt.id.desc()).all()
+        if len(attempts) > 1:
+            latest = attempts[0]
+            older = attempts[1:]
+            for a in older:
+                AttemptWitness.query.filter_by(attempt_id=a.id).delete()
+                db.session.delete(a)
+            db.session.commit()
+            return jsonify({
+                'success': True, 
+                'message': f'가장 최근 시도(ID: {latest.id})를 제외한 {len(older)}건의 이전 시도를 삭제하였습니다.'
+            })
+        return jsonify({'success': True, 'message': '보존할 최근 1건 외에 삭제할 이전 시도가 없습니다.'})
+
+@app.route('/api/attempts/delete/<int:attempt_id>', methods=['POST', 'DELETE'])
+def delete_attempt(attempt_id):
+    """특정 시도 내역 삭제"""
+    with app.app_context():
+        att = Attempt.query.get(attempt_id)
+        if not att:
+            return jsonify({'success': False, 'message': '해당 시도 항목을 찾을 수 없습니다.'}), 404
+        
+        AttemptWitness.query.filter_by(attempt_id=attempt_id).delete()
+        db.session.delete(att)
+        db.session.commit()
+        return jsonify({'success': True, 'message': '선택한 시도 항목이 삭제되었습니다.'})
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
